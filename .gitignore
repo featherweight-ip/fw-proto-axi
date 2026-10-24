@@ -231,3 +231,6 @@ rundir/
 .cursor/
 # reference clones of fw-proto-chi / fw-proto-wb (read-only examples)
 .ref/
+# ci/run.sh outputs
+ci-reports/
+.ci-venv/
