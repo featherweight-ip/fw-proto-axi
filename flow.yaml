@@ -50,11 +50,11 @@ package:
 
   # Every suite in every view: `dfm run tests --tests types`.
   - override: tests
-    needs: [suites.types, suites.l1-basic]
+    needs: [suites.types, suites.l1-basic, suites.l2-basic]
 
   # What CI runs on every commit.
   - override: smoke
-    needs: [suites.types, suites.l1-basic]
+    needs: [suites.types, suites.l1-basic, suites.l2-basic]
 
   # Formal (tests/formal/flow.yaml).
   - root: fv

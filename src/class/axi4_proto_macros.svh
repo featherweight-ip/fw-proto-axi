@@ -25,4 +25,19 @@
         virtual task ar(input axi4_ar_beat_t f); m_imp.NAME``_ar(f); endtask \
     `FW_MIRROR_IMP_END(NAME)
 
+// `FW_AXI4_XACT_IMP(IMP, NAME): export NAME providing axi4_xact_if; xact()
+// redirects to IMP's NAME``_xact(x). Construct in build(): NAME = new(this);
+`define FW_AXI4_XACT_IMP(IMP, NAME) \
+    class NAME``_imp_t extends fw_export #(axi4_xact_if) implements axi4_xact_if; \
+        local IMP m_imp; \
+        function new(IMP imp); \
+            super.new(`"NAME`", imp, this); \
+            m_imp = imp; \
+        endfunction \
+        virtual task xact(axi4_xact x); \
+            m_imp.NAME``_xact(x); \
+        endtask \
+    endclass \
+    NAME``_imp_t NAME
+
 `endif /* INCLUDED_AXI4_PROTO_MACROS_SVH */

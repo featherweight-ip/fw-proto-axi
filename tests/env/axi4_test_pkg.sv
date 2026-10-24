@@ -71,6 +71,69 @@ package axi4_test_pkg;
         endfunction
     endclass
 
+    // A trivial L2 target for the adapter suites: logs every transaction it
+    // serves, answers reads with data_of(addr, beat) and every transaction
+    // with `resp` (or err_resp inside [err_lo, err_hi]).
+    class axi4_test_target extends fw_component;
+        `FW_AXI4_XACT_IMP(axi4_test_target, xact);
+
+        axi4_xact    seen[$];
+        axi4_resp_e  resp = AXI4_RESP_OKAY;
+        axi4_addr_t  err_lo = '1, err_hi = '0;
+        axi4_resp_e  err_resp = AXI4_RESP_SLVERR;
+
+        function new(string name, fw_component parent); super.new(name, parent); endfunction
+        function void build(); xact = new(this); endfunction
+
+        static function axi4_data_t data_of(axi4_addr_t addr, int unsigned n);
+            return {16{addr[31:0] ^ (32'h9e37_79b9 * (n + 1))}};
+        endfunction
+
+        task xact_xact(axi4_xact x);
+            x.resp = (x.addr >= err_lo && x.addr <= err_hi) ? err_resp : resp;
+            if (!x.write)
+                for (int unsigned n = 0; n < x.n_beats(); n++)
+                    x.data.push_back(data_of(x.addr, n));
+            seen.push_back(x);
+        endtask
+    endclass
+
+    // L2: manager adapter -> link -> subordinate adapter -> test target.
+    //   mgr.axi (socket) <-- AXI4 link --> sub.axi (mirror);  sub.tgt -> tgt
+    class axi4_l2_env extends axi4_env_base;
+        axi4_mgr_adapter mgr;
+        axi4_sub_adapter sub;
+        axi4_test_target tgt;
+
+        function new(string name, fw_component parent); super.new(name, parent); endfunction
+
+        function void build();
+            mgr = new("mgr", this, cfg);
+            sub = new("sub", this, cfg);
+            tgt = new("tgt", this);
+        endfunction
+
+        function void connect();
+            super.connect();
+            sub.tgt.connect(tgt.xact);
+        endfunction
+
+        function int unsigned n_errors();
+            return mgr.n_errors + sub.n_errors;
+        endfunction
+
+        virtual function bit idle();
+            return mgr.idle() && sub.idle() && n_errors() == 0;
+        endfunction
+
+        virtual function void clear();
+            tgt.seen.delete();
+            tgt.resp = AXI4_RESP_OKAY;
+            tgt.err_lo = '1; tgt.err_hi = '0;
+            sub.max_delay = 0;
+        endfunction
+    endclass
+
     // ---- beat generators. Every beat is random and pre-masked to the
     // configuration; address beats are legal bursts (A3.4.1).
     function automatic logic [1023:0] rand_bits();
@@ -111,5 +174,18 @@ package axi4_test_pkg;
 
     function automatic axi4_r_beat_t rand_r(axi4_cfg cfg);
         return cfg.mask_r(axi4_r_beat_t'(rand_bits()));
+    endfunction
+
+    // A random legal transaction (request half), pre-masked to cfg.
+    function automatic axi4_xact rand_xact(axi4_cfg cfg, bit write);
+        axi4_xact x = axi4_xact::from_ax(rand_ax(cfg, !write), write);
+        if (write)
+            for (int unsigned n = 0; n < x.n_beats(); n++) begin
+                axi4_w_beat_t w = rand_w(cfg);
+                x.data.push_back(w.data);
+                x.strb.push_back(w.strb);
+                x.wuser.push_back(w.user);
+            end
+        return x;
     endfunction
 endpackage

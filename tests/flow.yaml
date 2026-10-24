@@ -70,6 +70,15 @@ fragment:
       include: [axi4_l1_harness.sv]
       incdirs: [.]
 
+  - name: l2-harness-tlm
+    uses: std.FileSet
+    needs: [test-env]
+    with:
+      type: systemVerilogSource
+      base: env/tlm
+      include: [axi4_l2_harness.sv]
+      incdirs: [.]
+
   # ---- suite: l1_basic
   - name: l1-basic-tests
     uses: std.FileSet
@@ -128,3 +137,58 @@ fragment:
         needs: ["l1-basic-run.${{ this.image }}"]
         with:
           name: "l1_basic-${{ this.image }}"
+
+  # ---- suite: l2_basic
+  - name: l2-basic-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [l2_basic_unit_test.sv]
+
+  - name: l2-basic-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [l2-basic-tests]
+    with:
+      harness: [axi4_l2_harness]
+
+  - name: l2-basic-bench-tlm
+    passthrough: all
+    needs: [l2-harness-tlm, l2-basic-runner]
+
+  - name: l2-basic-img
+    strategy:
+      select:
+        axes:
+          view: [tlm]
+      body:
+      - uses: hdlsim.SimImage
+        needs: [svunit, "l2-basic-bench-${{ this.view }}", flags-img]
+        with:
+          sim: "${{ sim }}"
+          top: [testrunner]
+
+  - name: l2-basic-run
+    strategy:
+      select:
+        axes:
+          view: [tlm]
+      body:
+      - uses: hdlsim.SimRun
+        needs: ["l2-basic-img.${{ this.view }}", "flags-run-${{ build }}"]
+        with:
+          sim: "${{ sim }}"
+          mode: test
+
+  - name: l2-basic
+    tags:
+    - std.Test: {name: l2_basic}
+    strategy:
+      matrix:
+        image: [tlm]
+      body:
+      - name: "${{ this.image }}"
+        uses: hdltest.svunit.Check
+        needs: ["l2-basic-run.${{ this.image }}"]
+        with:
+          name: "l2_basic-${{ this.image }}"
