@@ -353,7 +353,9 @@ module axi4_checker
             if (w_hs && w_to_new) `AXI4_CHK_M(wlast == (wcur == awlen))
             if (w_hs && w_ahead && wcur == 8'd255) `AXI4_CHK_M(wlast)
             if (aw_paired) `AXI4_CHK_M(awlen == we_len[0])
-            if (aw_hs && !w_tgt_ok && we_n == '0 && !w_hs) `AXI4_CHK_M(wcur <= awlen)
+            // Data that ran ahead of this AW must fit it (with or without a
+            // W beat this cycle).
+            if (aw_hs && !w_tgt_ok && we_n == '0) `AXI4_CHK_M(wcur <= awlen)
 
             // Checker capacity (MAX_OUT).
             if (awvalid) `AXI4_CHK_M(wq_cnt < CW'(N))

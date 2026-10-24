@@ -57,6 +57,9 @@ package:
     needs: [suites.types]
 
   # Formal (tests/formal/flow.yaml).
+  - root: fv
+    desc: Back-to-back formal BMC of the manager and subordinate cores
+    needs: [formal.bmc]
   - root: fv-cover
     desc: Reachability of legal AXI4 behaviour under the pin checker's rules
     needs: [formal.checker-cover]

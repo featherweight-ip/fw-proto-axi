@@ -2,9 +2,11 @@
 // Synthesizable; no packages.
 //
 // Full throughput (one beat per cycle). Every output is registered except
-// in_ready's reset gate: out_valid/out_data are held while out_ready is low
-// (VALID and payload stable until the handshake), and in_ready is low in
-// reset. Synchronous active-low reset; data registers are not reset.
+// the reset gates: out_valid/out_data are held while out_ready is low
+// (VALID and payload stable until the handshake), and out_valid and
+// in_ready are forced low while aresetn is low (A3.1.2: VALID low in reset,
+// from the first reset cycle). Synchronous active-low reset; data registers
+// are not reset.
 module axi4_slice #(
     parameter int unsigned W = 1
 ) (
@@ -19,23 +21,25 @@ module axi4_slice #(
     input  logic         out_ready,
     output logic [W-1:0] out_data
 );
+    logic         out_valid_q;
     logic         skid_valid;
     logic [W-1:0] skid_data;
 
-    assign in_ready = aresetn & ~skid_valid;
+    assign out_valid = aresetn & out_valid_q;
+    assign in_ready  = aresetn & ~skid_valid;
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin
-            out_valid  <= 1'b0;
-            skid_valid <= 1'b0;
-        end else if (out_ready || !out_valid) begin
+            out_valid_q <= 1'b0;
+            skid_valid  <= 1'b0;
+        end else if (out_ready || !out_valid_q) begin
             // Output register free (or emptying): refill, skid first.
             if (skid_valid) begin
-                out_valid  <= 1'b1;
-                out_data   <= skid_data;
-                skid_valid <= 1'b0;
+                out_valid_q <= 1'b1;
+                out_data    <= skid_data;
+                skid_valid  <= 1'b0;
             end else begin
-                out_valid <= in_valid;
+                out_valid_q <= in_valid;
                 if (in_valid)
                     out_data <= in_data;
             end
