@@ -15,7 +15,7 @@
 module axi4_fv
     import axi4_types_pkg::*;
 #(
-    localparam axi4_param_t P = '{ADDR_W: 16, DATA_W: 32, ID_W: 1,
+    localparam axi4_param_t P = '{ADDR_W: 12, DATA_W: 8, ID_W: 1,
         AWUSER_W: 0, WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0},
     localparam int unsigned MAX_OUT = 2,
     localparam int unsigned AWB_ = axi4_ax_bits(P, 1'b0),
@@ -54,14 +54,14 @@ module axi4_fv
     logic awvalid, awready, awlock, wvalid, wready, wlast;
     logic bvalid, bready, arvalid, arready, arlock, rvalid, rready, rlast;
     logic [0:0]  awid, bid, arid, rid;
-    logic [15:0] awaddr, araddr;
+    logic [P.ADDR_W-1:0] awaddr, araddr;
     logic [7:0]  awlen, arlen;
-    logic [3:0]  wstrb;
+    logic [P.DATA_W/8-1:0] wstrb;
     logic [2:0]  awsize, arsize, awprot, arprot;
     logic [1:0]  awburst, arburst, bresp, rresp;
     logic [3:0]  awcache, arcache, awqos, arqos, awregion, arregion;
     logic        awuser, wuser, buser, aruser, ruser;
-    logic [31:0] wdata, rdata;
+    logic [P.DATA_W-1:0] wdata, rdata;
 
     axi4_mgr_core #(.P(P)) u_mgr (
         .aw_valid(m_aw_valid), .aw_ready(m_aw_ready), .aw_data(m_aw_data),

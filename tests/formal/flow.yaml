@@ -4,6 +4,10 @@
 #   dfm run fv-cover    reachability of legal AXI4 behaviour under the
 #                       checker's rules, all assumed (they are not vacuous)
 #   dfm run fv          BMC of the back-to-back cores (axi4_fv.sv)
+#   dfm run fv-prove    unbounded proof of axi4_slice (axi4_slice_fv.sv),
+#                       the cores' only state; the checker-level properties
+#                       of the back-to-back harness are BMC-only (abc pdr
+#                       did not converge on it in 10 min)
 fragment:
   name: formal
 
@@ -51,3 +55,14 @@ fragment:
     with:
       top: axi4_fv
       depth: 16
+
+  # formal.sby has no prove mode; run_sby.sh is the same SymbiYosys run.
+  # Also covers the slice's full-occupancy case (FV_COVER) so the proof is
+  # not vacuous.
+  - name: prove
+    uptodate: false
+    shell: bash
+    run: |
+      set -e
+      FV_TOP=axi4_slice_fv FV_ENGINE="abc pdr" "${{ rootdir }}/tests/formal/run_sby.sh" prove 8 "$TASK_RUNDIR"
+      FV_TOP=axi4_slice_fv FV_DEFINES=-DFV_COVER "${{ rootdir }}/tests/formal/run_sby.sh" cover 8 "$TASK_RUNDIR"

@@ -200,10 +200,11 @@ module axi4_checker
 
         // we: pop the head when an AW pairs with it, push a completed
         // ahead-of-AW burst.
-        if (aw_paired) begin
-            for (int i = 0; i < N - 1; i++) nwe_len[i] = we_len[i + 1];
-            nwe_n = we_n - 1'b1;
-        end
+        // (The loop is outside the `if`: yosys infers a latch for a loop
+        // variable assigned only on one branch.)
+        for (int i = 0; i < N - 1; i++)
+            if (aw_paired) nwe_len[i] = we_len[i + 1];
+        if (aw_paired) nwe_n = we_n - 1'b1;
         if (w_hs && wlast && w_ahead && nwe_n < CW'(N)) begin
             nwe_len[XW'(nwe_n)] = wcur;
             nwe_n          = nwe_n + 1'b1;
