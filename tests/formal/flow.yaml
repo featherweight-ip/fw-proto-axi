@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+#
+# Formal checks of the pin checker (tests/formal/axi4_checker_fv.sv).
+#   dfm run fv-cover    reachability of legal AXI4 behaviour under the
+#                       checker's rules, all assumed (they are not vacuous)
+fragment:
+  name: formal
+
+  tasks:
+  - name: checker-sv2v
+    uptodate: false
+    shell: bash
+    run: |
+      set -e
+      OUT="$TASK_RUNDIR/axi4_checker_fv.v"
+      sv2v --exclude=Assert -DFORMAL \
+        "${{ rootdir }}/src/types/axi4_types_pkg.sv" \
+        "${{ rootdir }}/src/checker/axi4_checker.sv" \
+        "${{ rootdir }}/tests/formal/axi4_checker_fv.sv" > "$OUT"
+      dfm-out fileset --filetype verilogSource --basedir "$TASK_RUNDIR" axi4_checker_fv.v
+
+  - name: checker-cover
+    uses: formal.sby.Cover
+    needs: [checker-sv2v]
+    with:
+      top: axi4_checker_fv
+      depth: 24

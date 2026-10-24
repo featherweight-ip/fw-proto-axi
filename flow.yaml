@@ -15,16 +15,18 @@ package:
   - hdlsim
   - hdltest.svunit
   - hdllint
+  - formal.sby
   - fw-hdl
 
   fragments:
   - src/flow.yaml
   - tests/flow.yaml
+  - tests/formal/flow.yaml
 
   tasks:
   # Synthesizable sources: the types package (cores and transactors later).
   - override: src-rtl
-    needs: [types]
+    needs: [types, checker]
 
   - override: lint-rtl
     needs: [lint]
@@ -53,3 +55,8 @@ package:
   # What CI runs on every commit.
   - override: smoke
     needs: [suites.types]
+
+  # Formal (tests/formal/flow.yaml).
+  - root: fv-cover
+    desc: Reachability of legal AXI4 behaviour under the pin checker's rules
+    needs: [formal.checker-cover]

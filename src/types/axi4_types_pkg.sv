@@ -258,5 +258,18 @@ package axi4_types_pkg;
         return !axi4_crosses_4k(addr, size, len, burst);
     endfunction
 
+    // The A7.2.4 exclusive-access rules: at most 16 transfers, a total of
+    // 1, 2, 4, ... 128 bytes, start address aligned to that total.
+    function automatic bit axi4_excl_legal(
+        axi4_addr_t addr, axi4_size_e size, axi4_len_t len);
+        int unsigned beats = axi4_burst_beats(len);
+        axi4_addr_t  total = axi4_addr_t'(beats) << size;
+        if (beats > AXI4_MAX_BEATS_FIXED_WRAP)
+            return 1'b0;
+        if (total > 128 || (total & (total - 1)) != 0)
+            return 1'b0;
+        return (addr & (total - 1)) == 0;
+    endfunction
+
     /* verilator lint_on UNUSEDPARAM */
 endpackage

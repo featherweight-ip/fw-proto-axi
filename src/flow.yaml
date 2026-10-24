@@ -10,3 +10,12 @@ fragment:
       base: types
       include: [axi4_types_pkg.sv]
       incdirs: [.]
+
+  # Passive pin-level protocol checker (assert or assume per side).
+  - export: checker
+    uses: std.FileSet
+    needs: [types]
+    with:
+      type: systemVerilogSource
+      base: checker
+      include: [axi4_checker.sv]
