@@ -114,15 +114,17 @@ fragment:
           sim: "${{ sim }}"
           mode: test
 
+  # The view axis is `image`: the project's test runner (hdlsim) reads views
+  # from that axis name; the test name comes from the tag on the matrix task.
   - name: l1-basic
+    tags:
+    - std.Test: {name: l1_basic}
     strategy:
       matrix:
-        view: [tlm]
+        image: [tlm]
       body:
-      - name: "${{ this.view }}"
+      - name: "${{ this.image }}"
         uses: hdltest.svunit.Check
-        needs: ["l1-basic-run.${{ this.view }}"]
+        needs: ["l1-basic-run.${{ this.image }}"]
         with:
-          name: "l1_basic-${{ this.view }}"
-        tags:
-        - std.Test: {name: l1_basic, view: "${{ this.view }}"}
+          name: "l1_basic-${{ this.image }}"
