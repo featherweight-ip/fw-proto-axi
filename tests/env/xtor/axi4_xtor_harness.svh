@@ -23,6 +23,16 @@ module `AXI4_HARNESS;
             super.new(name, parent);
             monitored = 1;
         endfunction
+
+        // Set by the module at time 0 (the transactors' class-side interfaces).
+        static virtual axi4_xtor_if mgr_vif, sub_vif;
+
+        virtual function void set_backpressure(int unsigned n);
+            for (int i = 0; i < AXI4_N_CH; i++) begin
+                mgr_vif.max_gap[i] = n;
+                sub_vif.max_gap[i] = n;
+            end
+        endfunction
     endclass
 
     localparam axi4_param_t P = axi4_test_pkg::AXI4_TEST_PARAM;
@@ -68,6 +78,11 @@ module `AXI4_HARNESS;
 `ifndef AXI4_NO_CHECK
     axi4_checker #(.P(P), .MAX_OUT(16)) u_chk (.*);
 `endif
+
+    initial begin
+        axi4_env_xtor::mgr_vif = u_mgr.u_if;
+        axi4_env_xtor::sub_vif = u_sub.u_if;
+    end
 
     // ---- the class tree, bound to the pins
     `fw_root_begin(axi4_env_xtor, u_root, clock, reset)

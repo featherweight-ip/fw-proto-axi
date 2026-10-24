@@ -46,6 +46,12 @@ package axi4_test_pkg;
         virtual task link_up();
         endtask
 
+        // Random stalls on the link: up to n idle cycles before each beat's
+        // VALID (sending side) or READY (receiving side). A view with pins
+        // overrides this; elsewhere it does nothing.
+        virtual function void set_backpressure(int unsigned n);
+        endfunction
+
         task run();
             link_up();
             ready = 1;

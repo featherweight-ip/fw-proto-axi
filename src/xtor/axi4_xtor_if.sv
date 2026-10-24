@@ -38,6 +38,11 @@ interface axi4_xtor_if (
 
     bit           tx_busy[AXI4_N_CH];
     bit           rx_busy[AXI4_N_CH];
+
+    // Backpressure knob, set from the class side: before each beat,
+    // send()/recv() idle a random 0..max_gap[ch] cycles before raising
+    // VALID (TX) or READY (RX). 0 = full throughput.
+    int unsigned  max_gap[AXI4_N_CH];
     /* verilator lint_on UNUSEDSIGNAL */
 
     initial begin
@@ -45,6 +50,7 @@ interface axi4_xtor_if (
             tx_valid[i] = 1'b0;
             tx_data[i]  = '0;
             rx_ready[i] = 1'b0;
+            max_gap[i]  = 0;
         end
     end
 
@@ -68,6 +74,7 @@ interface axi4_xtor_if (
         @(negedge aclk);
         while (tx_busy[ch]) @(negedge aclk);
         tx_busy[ch]  = 1'b1;
+        repeat ($urandom_range(max_gap[ch], 0)) @(negedge aclk);
         tx_data[ch]  = d;
         tx_valid[ch] = 1'b1;
         while (!tx_ready[ch]) @(negedge aclk);
@@ -81,6 +88,7 @@ interface axi4_xtor_if (
         @(negedge aclk);
         while (rx_busy[ch]) @(negedge aclk);
         rx_busy[ch] = 1'b1;
+        repeat ($urandom_range(max_gap[ch], 0)) @(negedge aclk);
         while (!rx_valid[ch]) @(negedge aclk);
         d            = rx_data[ch];
         rx_ready[ch] = 1'b1;

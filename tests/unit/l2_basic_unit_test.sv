@@ -96,6 +96,39 @@ module l2_basic_unit_test;
         `FAIL_UNLESS_EQUAL(bad, 0)
     `SVTEST_END
 
+    // Random VALID/READY stalls on every channel (pin views): the same
+    // traffic as random_bursts still completes and arrives intact, and takes
+    // longer than without stalls (so the knob reached the pins).
+    task automatic seq_bursts(output int unsigned bad, output time dt);
+        int unsigned base = env.tgt.seen.size();
+        time t0 = $time;
+        bad = 0;
+        for (int i = 0; i < N; i++) begin
+            axi4_xact x = rand_xact(env.cfg, i % 2);
+            axi4_xact sent = axi4_xact::from_ax(x.to_ax(), x.write);
+            sent.data = x.data; sent.strb = x.strb; sent.wuser = x.wuser;
+            env.mgr.xact.xact(x);
+            if (!x.done) bad++;
+            if (env.tgt.seen.size() != base + i + 1 ||
+                diff_req(env.tgt.seen[base + i], sent) != 0) bad++;
+            if (!x.write && diff_rd(x, AXI4_RESP_OKAY) != 0) bad++;
+            if (x.write && x.resp !== AXI4_RESP_OKAY) bad++;
+        end
+        dt = $time - t0;
+    endtask
+
+    `SVTEST(backpressure)
+        int unsigned bad0, bad1;
+        time dt0, dt1;
+        seq_bursts(bad0, dt0);
+        env.set_backpressure(4);
+        seq_bursts(bad1, dt1);
+        env.set_backpressure(0);
+        `FAIL_UNLESS_EQUAL(bad0, 0)
+        `FAIL_UNLESS_EQUAL(bad1, 0)
+        if (env.monitored) `FAIL_UNLESS(dt1 > dt0 + dt0 / 2)
+    `SVTEST_END
+
     // Many callers at once over few IDs, with random service delays at the
     // subordinate: all complete, and per ID and direction they complete in
     // the order the target served them (same-ID ordering, A6).
