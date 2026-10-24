@@ -18,6 +18,9 @@ module axi4_checker
     parameter int unsigned MAX_OUT    = 8,
     parameter bit          ASSUME_MGR = 1'b0,
     parameter bit          ASSUME_SUB = 1'b0,
+    // Simulation only: a failed rule counts in n_err_m / n_err_s (read by
+    // hierarchical name) instead of asserting. For tests that plant faults.
+    parameter bit          COUNT_ONLY = 1'b0,
     // Field widths, from P. A width of 0 (signal absent) is carried as one
     // bit, tied off by the user.
     localparam int unsigned AW_  = P.ADDR_W,
@@ -105,8 +108,21 @@ module axi4_checker
     // A manager-side and a subordinate-side rule. Used as statements only
     // (never directly before an `else`). The inner begin/end keep an `else`
     // from binding to the assertion as its fail action.
+`ifdef FORMAL
 `define AXI4_CHK_M(c) begin if (ASSUME_MGR) begin assume (c); end else begin assert (c); end end
 `define AXI4_CHK_S(c) begin if (ASSUME_SUB) begin assume (c); end else begin assert (c); end end
+`else
+    // Failed rules seen with COUNT_ONLY (at most one count per side per cycle).
+    /* verilator lint_off UNUSEDSIGNAL */
+    int unsigned n_err_m, n_err_s;  // 2-state: 0 at start
+    /* verilator lint_on UNUSEDSIGNAL */
+`define AXI4_CHK_M(c) begin if (ASSUME_MGR) begin assume (c); end \
+    else if (COUNT_ONLY) begin if (!(c)) n_err_m <= n_err_m + 1; end \
+    else begin assert (c); end end
+`define AXI4_CHK_S(c) begin if (ASSUME_SUB) begin assume (c); end \
+    else if (COUNT_ONLY) begin if (!(c)) n_err_s <= n_err_s + 1; end \
+    else begin assert (c); end end
+`endif
 
     // ------------------------------------------------------------------
     // Payloads, for the stability rules

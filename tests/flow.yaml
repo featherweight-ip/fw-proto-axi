@@ -47,6 +47,45 @@ fragment:
     tags:
     - std.Test: {name: types}
 
+  # ---- suite: chk_teeth (axi4_checker standalone, COUNT_ONLY, planted pin
+  # faults; no harness, one view)
+  - name: chk-teeth-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [chk_teeth_unit_test.sv]
+
+  - name: chk-teeth-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [chk-teeth-tests]
+
+  - name: chk-teeth-bench
+    passthrough: all
+    needs: [fw.proto.axi.types, fw.proto.axi.checker, chk-teeth-runner]
+
+  - name: chk-teeth-img
+    uses: hdlsim.SimImage
+    needs: [svunit, chk-teeth-bench, flags-img]
+    with:
+      sim: "${{ sim }}"
+      top: [testrunner]
+
+  - name: chk-teeth-run
+    uses: hdlsim.SimRun
+    needs: [chk-teeth-img, "flags-run-${{ build }}"]
+    with:
+      sim: "${{ sim }}"
+      mode: test
+
+  - name: chk-teeth
+    uses: hdltest.svunit.Check
+    needs: [chk-teeth-run]
+    with:
+      name: chk_teeth
+    tags:
+    - std.Test: {name: chk_teeth}
+
   # ---- suites x views. A suite is written against API handles only; a VIEW
   # is the harness that supplies them (tests/env/<view>/). Each (suite,
   # view) cell is one image and one run: `dfm run tests --tests l1_basic`.
