@@ -24,9 +24,9 @@ package:
   - tests/formal/flow.yaml
 
   tasks:
-  # Synthesizable sources: the types package (cores and transactors later).
+  # Synthesizable sources: types, checker, cores (transactors later).
   - override: src-rtl
-    needs: [types, checker]
+    needs: [types, checker, cores]
 
   - override: lint-rtl
     needs: [lint]
@@ -39,7 +39,7 @@ package:
     with:
       type: systemVerilogSource
       base: tests/lint
-      include: [axi4_lint_top.sv]
+      include: [axi4_lint_top.sv, axi4_lint_b2b.sv]
 
   - name: lint
     uses: hdllint.Rtl

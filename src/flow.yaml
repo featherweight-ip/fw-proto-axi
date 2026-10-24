@@ -19,3 +19,13 @@ fragment:
       type: systemVerilogSource
       base: checker
       include: [axi4_checker.sv]
+
+  # Manager / subordinate channel cores: per-channel register slices between
+  # packed user streams and the AXI4 pins.
+  - export: cores
+    uses: std.FileSet
+    needs: [types]
+    with:
+      type: systemVerilogSource
+      base: cores
+      include: [axi4_slice.sv, axi4_mgr_core.sv, axi4_sub_core.sv]
