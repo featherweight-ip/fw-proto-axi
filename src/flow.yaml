@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+fragment:
+  # Unnamed: tasks live directly under the package (fw.proto.axi.types, ...).
+  tasks:
+  # AXI4 encodings, beat structs and burst helpers. Synthesizable, fw-hdl-free.
+  - export: types
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: types
+      include: [axi4_types_pkg.sv]
+      incdirs: [.]

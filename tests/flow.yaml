@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+#
+# SVUnit suites. Each suite is one image and one run, built only when
+# selected: `dfm run tests --tests types`.
+fragment:
+  name: suites
+
+  tasks:
+  - name: svunit
+    uses: hdltest.svunit.Lib
+
+  # ---- suite: types (no harness: pure functions of axi4_types_pkg)
+  - name: types-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [types_unit_test.sv]
+
+  - name: types-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [types-tests]
+
+  - name: types-bench
+    passthrough: all
+    needs: [fw.proto.axi.types, types-runner]
+
+  - name: types-img
+    uses: hdlsim.SimImage
+    needs: [svunit, types-bench, flags-img]
+    with:
+      sim: "${{ sim }}"
+      top: [testrunner]
+
+  - name: types-run
+    uses: hdlsim.SimRun
+    needs: [types-img, "flags-run-${{ build }}"]
+    with:
+      sim: "${{ sim }}"
+      mode: test
+
+  - name: types
+    uses: hdltest.svunit.Check
+    needs: [types-run]
+    with:
+      name: types
+    tags:
+    - std.Test: {name: types}

@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+package:
+  name: fw.proto.axi
+
+  # The methodology-neutral DV archetype (dv-flow-libproject): the same verbs
+  # as every project built this way -- `dfm run tests`, `smoke`, `lint-rtl`,
+  # `tests-info`, `--sim`, `--build` -- with this file filling its slots.
+  uses: project.dv
+
+  # IVPM-generated map: resolves imports by name under packages/.
+  package-map: packages/dv-flow-package-map.yaml
+
+  imports:
+  - project.dv
+  - hdlsim
+  - hdltest.svunit
+  - hdllint
+  - fw-hdl
+
+  fragments:
+  - src/flow.yaml
+  - tests/flow.yaml
+
+  tasks:
+  # Synthesizable sources: the types package (cores and transactors later).
+  - override: src-rtl
+    needs: [types]
+
+  - override: lint-rtl
+    needs: [lint]
+
+  # Verilator lint over everything synthesizable, elaborated from a lint top
+  # (tests/lint). Our own code: held to ZERO findings -- no baseline. A
+  # waiver needs a reason written next to it in lint-waivers.yaml.
+  - name: lint-top
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: tests/lint
+      include: [axi4_lint_top.sv]
+
+  - name: lint
+    uses: hdllint.Rtl
+    needs: [src-rtl, lint-top]
+    with:
+      top: [axi4_lint_top]
+      waivers: lint-waivers.yaml
+
+  # Every suite in every view: `dfm run tests --tests types`.
+  - override: tests
+    needs: [suites.types]
+
+  # What CI runs on every commit.
+  - override: smoke
+    needs: [suites.types]
