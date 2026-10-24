@@ -216,3 +216,18 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+
+# ---> fw-proto-axi
+# The AXI specification is Arm's text: never commit it.
+IHI*
+# IVPM-managed dependencies and dfm run directories
+packages/
+rundir/
+!.envrc
+!tests/env/
+# ivpm-populated agent skill links
+.agents/
+.claude/
+.cursor/
+# reference clones of fw-proto-chi / fw-proto-wb (read-only examples)
+.ref/

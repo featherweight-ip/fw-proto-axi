@@ -1,0 +1,39 @@
+package:
+  name: fw-proto-axi
+  default-dep-set: dev
+
+  dep-sets:
+  - name: use
+    deps:
+    - name: fw-hdl
+      url: https://github.com/featherweight-hdl/fw-hdl.git
+      dep-set: default
+  - name: dev
+    uses: use
+    deps:
+    - name: fw-hdl
+      url: https://github.com/featherweight-hdl/fw-hdl.git
+      dep-set: default-dev
+    - name: dv-flow-mgr
+      url: https://github.com/dv-flow/dv-flow-mgr.git
+      dep-set: default-dev
+    - name: dv-flow-libhdlsim
+      url: https://github.com/dv-flow/dv-flow-libhdlsim.git
+      dep-set: default-dev
+    - name: dv-flow-libproject
+      url: https://github.com/dv-flow/dv-flow-libproject.git
+      dep-set: default-dev
+    # SVUnit suites (hdltest.svunit), formal (formal.sby), lint (hdllint.Rtl)
+    - name: dv-flow-libhdltest
+      url: https://github.com/dv-flow/dv-flow-libhdltest.git
+      dep-set: default-dev
+    - name: svunit
+      url: https://github.com/svunit/svunit.git
+      tag: v3.38.1
+      type: raw
+    - name: dv-flow-libformal
+      url: https://github.com/dv-flow/dv-flow-libformal.git
+      dep-set: default-dev
+    - name: dv-flow-libhdllint
+      url: https://github.com/dv-flow/dv-flow-libhdllint.git
+      dep-set: default-dev
