@@ -29,3 +29,14 @@ fragment:
       type: systemVerilogSource
       base: cores
       include: [axi4_slice.sv, axi4_mgr_core.sv, axi4_sub_core.sv]
+
+  # The class layer: L1 APIs, link types, IMP macros, interface config,
+  # scripted endpoints. Built on fw-hdl and its sockets.
+  - export: class
+    uses: std.FileSet
+    needs: [types, fw-hdl.hdl.sv-src]
+    with:
+      type: systemVerilogSource
+      base: class
+      include: [fw_proto_axi4_pkg.sv]
+      incdirs: [.]

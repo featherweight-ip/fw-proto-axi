@@ -46,3 +46,83 @@ fragment:
       name: types
     tags:
     - std.Test: {name: types}
+
+  # ---- suites x views. A suite is written against API handles only; a VIEW
+  # is the harness that supplies them (tests/env/<view>/). Each (suite,
+  # view) cell is one image and one run: `dfm run tests --tests l1_basic`.
+
+  # The envs every suite shares (axi4_test_pkg: L1 env, generators).
+  - name: test-env
+    uses: std.FileSet
+    needs: [fw.proto.axi.class]
+    with:
+      type: systemVerilogSource
+      base: env
+      include: [axi4_test_pkg.sv]
+
+  # One harness per (level, view); each defines module axi4_l<N>_harness.
+  - name: l1-harness-tlm
+    uses: std.FileSet
+    needs: [test-env]
+    with:
+      type: systemVerilogSource
+      base: env/tlm
+      include: [axi4_l1_harness.sv]
+      incdirs: [.]
+
+  # ---- suite: l1_basic
+  - name: l1-basic-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [l1_basic_unit_test.sv]
+
+  - name: l1-basic-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [l1-basic-tests]
+    with:
+      harness: [axi4_l1_harness]
+
+  # What one view compiles besides SVUnit: its harness (and through it the
+  # env and the class layer), then the suite.
+  - name: l1-basic-bench-tlm
+    passthrough: all
+    needs: [l1-harness-tlm, l1-basic-runner]
+
+  - name: l1-basic-img
+    strategy:
+      select:
+        axes:
+          view: [tlm]
+      body:
+      - uses: hdlsim.SimImage
+        needs: [svunit, "l1-basic-bench-${{ this.view }}", flags-img]
+        with:
+          sim: "${{ sim }}"
+          top: [testrunner]
+
+  - name: l1-basic-run
+    strategy:
+      select:
+        axes:
+          view: [tlm]
+      body:
+      - uses: hdlsim.SimRun
+        needs: ["l1-basic-img.${{ this.view }}", "flags-run-${{ build }}"]
+        with:
+          sim: "${{ sim }}"
+          mode: test
+
+  - name: l1-basic
+    strategy:
+      matrix:
+        view: [tlm]
+      body:
+      - name: "${{ this.view }}"
+        uses: hdltest.svunit.Check
+        needs: ["l1-basic-run.${{ this.view }}"]
+        with:
+          name: "l1_basic-${{ this.view }}"
+        tags:
+        - std.Test: {name: l1_basic, view: "${{ this.view }}"}
