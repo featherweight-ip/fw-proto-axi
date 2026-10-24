@@ -1,5 +1,6 @@
-// Lint elaboration: axi4_mgr_xtor -> axi4_sub_xtor on internal pins. The
-// class-facing streams are left to the (absent) bridges.
+// Lint elaboration: axi4_mgr_xtor -> axi4_sub_xtor on internal pins, with
+// an axi4_mon_xtor on them. The class-facing streams are left to the
+// (absent) bridges.
 module axi4_lint_xtor
     import axi4_types_pkg::*;
 #(
@@ -33,4 +34,5 @@ module axi4_lint_xtor
 
     axi4_mgr_xtor #(.P(P)) u_mgr (.*);
     axi4_sub_xtor #(.P(P)) u_sub (.*);
+    axi4_mon_xtor #(.P(P)) u_mon (.*);
 endmodule

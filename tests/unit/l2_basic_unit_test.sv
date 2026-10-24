@@ -156,5 +156,58 @@ module l2_basic_unit_test;
         `FAIL_UNLESS_EQUAL(diff_rd(r, AXI4_RESP_SLVERR), 0)
     `SVTEST_END
 
+    // In a view with a monitor on the link: it saw every beat, in order.
+    // Sequential random bursts, so each address beat matches what the target
+    // was asked, and every W/R beat appears once. Other views: nothing to check.
+    `SVTEST(monitor_counts)
+        int unsigned bad = 0, n_w = 0, n_r = 0, wi = 0, ri = 0;
+        axi4_xact xs[$];
+        axi4_mon_msg aw[$], w[$], b[$], ar[$], r[$];
+        env.mon.clear();
+        for (int i = 0; i < N; i++) begin
+            axi4_xact x = rand_xact(env.cfg, i % 2);
+            env.mgr.xact.xact(x);
+            xs.push_back(x);
+            if (x.write) n_w++; else n_r++;
+        end
+        if (env.monitored) begin
+            #20;    // two cycles: the bridge drains the ring
+            env.mon.select(aw, AXI4_CH_AW); env.mon.select(w, AXI4_CH_W);
+            env.mon.select(b, AXI4_CH_B);   env.mon.select(ar, AXI4_CH_AR);
+            env.mon.select(r, AXI4_CH_R);
+            `FAIL_UNLESS_EQUAL(aw.size(), n_w)
+            `FAIL_UNLESS_EQUAL(b.size(), n_w)
+            `FAIL_UNLESS_EQUAL(ar.size(), n_r)
+            foreach (xs[i]) begin
+                axi4_xact x = xs[i];
+                axi4_addr_beat_t ax = env.tgt.seen[i].to_ax();
+                if (x.write) begin
+                    if (aw[wi].aw !== ax) bad++;
+                    if (b[wi].b.id !== x.id || b[wi].b.resp !== AXI4_RESP_OKAY) bad++;
+                    wi++;
+                    foreach (x.data[k]) begin
+                        if (w.size() == 0) begin bad++; break; end
+                        if (w[0].w.data !== x.data[k] || w[0].w.strb !== x.strb[k] ||
+                            w[0].w.last !== (k == x.data.size() - 1)) bad++;
+                        void'(w.pop_front());
+                    end
+                end else begin
+                    if (ar[ri].ar !== ax) bad++;
+                    ri++;
+                    foreach (x.data[k]) begin
+                        if (r.size() == 0) begin bad++; break; end
+                        if (r[0].r.data !== x.data[k] || r[0].r.id !== x.id ||
+                            r[0].r.last !== (k == x.data.size() - 1)) bad++;
+                        void'(r.pop_front());
+                    end
+                end
+            end
+            `FAIL_UNLESS_EQUAL(w.size(), 0)
+            `FAIL_UNLESS_EQUAL(r.size(), 0)
+            `FAIL_UNLESS_EQUAL(bad, 0)
+        end else
+            `FAIL_UNLESS_EQUAL(env.mon.msgs.size(), 0)
+    `SVTEST_END
+
     `SVUNIT_TESTS_END
 endmodule

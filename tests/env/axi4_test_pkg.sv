@@ -12,19 +12,34 @@ package axi4_test_pkg;
         ADDR_W: 32, DATA_W: 64, ID_W: 4,
         AWUSER_W: 2, WUSER_W: 3, BUSER_W: 1, ARUSER_W: 2, RUSER_W: 3};
 
-    // What every env has: the interface configuration and the ready
-    // handshake with the tests.
+    // What every env has: the interface configuration, a recorder of every
+    // beat a monitor saw on the link, and the ready handshake with the tests.
     class axi4_env_base extends fw_component implements fw_runnable;
         static axi4_env_base inst;
 
         axi4_cfg cfg;
         bit      ready;
+        // Monitors (pin monitors, in pin views) bind to fan.in; the fanout
+        // feeds the recorder and whatever else an env subscribes. A view
+        // with a monitor on the link sets `monitored`.
+        axi4_mon_fanout   fan;
+        axi4_mon_recorder mon;
+        bit               monitored;
 
         function new(string name, fw_component parent);
             super.new(name, parent);
             cfg  = axi4_cfg::from_param(AXI4_TEST_PARAM);
             inst = this;
             add_runnable(this);
+        endfunction
+
+        function void build();
+            fan = new("fan", this);
+            mon = new("mon", this);
+        endfunction
+
+        function void connect();
+            fan.subscribe(mon);
         endfunction
 
         // A view whose link needs bring-up (pins, reset) overrides this.
@@ -46,6 +61,7 @@ package axi4_test_pkg;
         endfunction
 
         virtual function void clear();
+            mon.clear();
         endfunction
     endclass
 
@@ -58,6 +74,7 @@ package axi4_test_pkg;
         function new(string name, fw_component parent); super.new(name, parent); endfunction
 
         function void build();
+            super.build();
             mgr = new("mgr", this);
             sub = new("sub", this);
         endfunction
@@ -67,6 +84,7 @@ package axi4_test_pkg;
         endfunction
 
         virtual function void clear();
+            super.clear();
             mgr.clear(); sub.clear();
         endfunction
     endclass
@@ -108,6 +126,7 @@ package axi4_test_pkg;
         function new(string name, fw_component parent); super.new(name, parent); endfunction
 
         function void build();
+            super.build();
             mgr = new("mgr", this, cfg);
             sub = new("sub", this, cfg);
             tgt = new("tgt", this);
@@ -127,6 +146,7 @@ package axi4_test_pkg;
         endfunction
 
         virtual function void clear();
+            super.clear();
             tgt.seen.delete();
             tgt.resp = AXI4_RESP_OKAY;
             tgt.err_lo = '1; tgt.err_hi = '0;
@@ -147,6 +167,7 @@ package axi4_test_pkg;
         function new(string name, fw_component parent); super.new(name, parent); endfunction
 
         function void build();
+            super.build();
             mgr  = new("mgr", this, cfg);
             sub  = new("sub", this, cfg);
             mem  = new("mem", this, cfg);
@@ -166,6 +187,7 @@ package axi4_test_pkg;
         endfunction
 
         virtual function void clear();
+            super.clear();
             mem.clear();
             sub.max_delay = 0;
         endfunction

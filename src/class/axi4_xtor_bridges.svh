@@ -62,3 +62,40 @@ class axi4_sub_xtor_bridge extends axi4_mgr_socket_t
         join
     endtask
 endclass
+
+// Publishes what an axi4_mon_xtor saw on the pins: a consuming PORT onto
+// axi4_mon_if, bound with
+//   `fw_root_bind_export(<subscriber export>, <mon>.u_if, axi4_mon_xtor_bridge)
+// Each handshake becomes one axi4_mon_msg, stamped with the cycle it was on
+// the pins.
+class axi4_mon_xtor_bridge extends fw_port #(axi4_mon_if) implements fw_runnable;
+    virtual axi4_mon_xtor_if vif;
+    axi4_cfg                 cfg;
+
+    function new(string name, fw_component parent, virtual axi4_mon_xtor_if vif);
+        super.new(name, parent);
+        this.vif = vif;
+        cfg = axi4_cfg::from_param(vif.p);
+        parent.add_runnable(this);
+    endfunction
+
+    virtual task run();
+        forever begin
+            axi4_ch_e           ch;
+            axi4_wire::stream_t s;
+            time                t_obs;
+            axi4_mon_msg        m;
+            vif.pop(ch, s, t_obs);
+            m = new(ch);
+            m.t = t_obs;
+            case (ch)
+                AXI4_CH_AW: m.aw = axi4_wire::unpack_aw(cfg, s);
+                AXI4_CH_W:  m.w  = axi4_wire::unpack_w(cfg, s);
+                AXI4_CH_B:  m.b  = axi4_wire::unpack_b(cfg, s);
+                AXI4_CH_AR: m.ar = axi4_wire::unpack_ar(cfg, s);
+                default:    m.r  = axi4_wire::unpack_r(cfg, s);
+            endcase
+            t.observe(m);
+        end
+    endtask
+endclass

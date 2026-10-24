@@ -6,7 +6,8 @@
 //
 //   mgr side -> axi4_mgr_xtor_bridge -> u_mgr ==pins== u_sub -> axi4_sub_xtor_bridge -> sub side
 //
-// An axi4_checker (all rules asserted) sits on the pins unless the including
+// An axi4_mon_xtor on the pins publishes every beat to the env's fan.in. An
+// axi4_checker (all rules asserted) sits on the pins unless the including
 // file defines AXI4_NO_CHECK (L1 tests drive streams that are not protocol
 // consistent).
 `include "fw_hdl_macros.svh"
@@ -18,7 +19,10 @@ module `AXI4_HARNESS;
     import axi4_test_pkg::*;
 
     class axi4_env_xtor extends `AXI4_ENV_T;
-        function new(string name, fw_component parent); super.new(name, parent); endfunction
+        function new(string name, fw_component parent);
+            super.new(name, parent);
+            monitored = 1;
+        endfunction
     endclass
 
     localparam axi4_param_t P = axi4_test_pkg::AXI4_TEST_PARAM;
@@ -60,6 +64,7 @@ module `AXI4_HARNESS;
 
     axi4_mgr_xtor #(.P(P)) u_mgr (.*);
     axi4_sub_xtor #(.P(P)) u_sub (.*);
+    axi4_mon_xtor #(.P(P)) u_mon (.*);
 `ifndef AXI4_NO_CHECK
     axi4_checker #(.P(P), .MAX_OUT(16)) u_chk (.*);
 `endif
@@ -68,5 +73,6 @@ module `AXI4_HARNESS;
     `fw_root_begin(axi4_env_xtor, u_root, clock, reset)
         `fw_root_bind_socket(`AXI4_EP_MGR, u_mgr.u_if, axi4_mgr_xtor_bridge)
         `fw_root_bind_mirror(`AXI4_EP_SUB, u_sub.u_if, axi4_sub_xtor_bridge)
+        `fw_root_bind_export(fan.in, u_mon.u_if, axi4_mon_xtor_bridge)
     `fw_root_end
 endmodule

@@ -38,7 +38,8 @@ fragment:
     with:
       type: systemVerilogSource
       base: xtor
-      include: [axi4_xtor_if.sv, axi4_mgr_xtor.sv, axi4_sub_xtor.sv]
+      include: [axi4_xtor_if.sv, axi4_mgr_xtor.sv, axi4_sub_xtor.sv,
+                axi4_mon_xtor_if.sv, axi4_mon_xtor.sv]
       incdirs: [.]
 
   # The class layer: L1 APIs, link types, IMP macros, interface config,

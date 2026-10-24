@@ -14,6 +14,7 @@ package fw_proto_axi4_pkg;
     `include "axi4_l1_if.svh"
     `include "axi4_cfg.svh"
     `include "axi4_wire.svh"
+    `include "axi4_mon.svh"
     `include "axi4_l1_inbox.svh"
     `include "axi4_l1_endpoints.svh"
 
