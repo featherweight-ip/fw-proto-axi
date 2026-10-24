@@ -30,6 +30,17 @@ fragment:
       base: cores
       include: [axi4_slice.sv, axi4_mgr_core.sv, axi4_sub_core.sv]
 
+  # Signal-level transactors: the class-facing interface and the manager and
+  # subordinate wrappers around the cores. fw-hdl-free.
+  - export: xtor-sv
+    uses: std.FileSet
+    needs: [types, cores]
+    with:
+      type: systemVerilogSource
+      base: xtor
+      include: [axi4_xtor_if.sv, axi4_mgr_xtor.sv, axi4_sub_xtor.sv]
+      incdirs: [.]
+
   # The class layer: L1 APIs, link types, IMP macros, interface config,
   # scripted endpoints. Built on fw-hdl and its sockets.
   - export: class

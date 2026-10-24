@@ -26,7 +26,7 @@ package:
   tasks:
   # Synthesizable sources: types, checker, cores (transactors later).
   - override: src-rtl
-    needs: [types, checker, cores]
+    needs: [types, checker, cores, xtor-sv]
 
   - override: lint-rtl
     needs: [lint]
@@ -39,7 +39,7 @@ package:
     with:
       type: systemVerilogSource
       base: tests/lint
-      include: [axi4_lint_top.sv, axi4_lint_b2b.sv]
+      include: [axi4_lint_top.sv, axi4_lint_b2b.sv, axi4_lint_xtor.sv]
 
   - name: lint
     uses: hdllint.Rtl

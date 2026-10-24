@@ -2,7 +2,8 @@
 // interface configuration, so Verilator's elaboration-time checks (width,
 // latch, unused, undriven) see all of it. For now: the types package, through
 // its burst helpers; the pin checker on free inputs; the manager and
-// subordinate cores back to back (axi4_lint_b2b).
+// subordinate cores back to back (axi4_lint_b2b); the manager and
+// subordinate transactors back to back (axi4_lint_xtor).
 module axi4_lint_top
     import axi4_types_pkg::*;
 (
@@ -68,4 +69,6 @@ module axi4_lint_top
         .s_aw_valid, .s_aw_ready, .s_aw_data, .s_w_valid, .s_w_ready, .s_w_data,
         .s_b_valid, .s_b_ready, .s_b_data, .s_ar_valid, .s_ar_ready, .s_ar_data,
         .s_r_valid, .s_r_ready, .s_r_data);
+
+    axi4_lint_xtor #(.P(P)) u_xtor (.aclk, .aresetn);
 endmodule

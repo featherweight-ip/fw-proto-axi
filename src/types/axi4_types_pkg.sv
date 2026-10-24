@@ -304,5 +304,40 @@ package axi4_types_pkg;
     endfunction
     /* verilator lint_on UNUSEDSIGNAL */
 
+    // Every field at its maximum width.
+    localparam axi4_param_t AXI4_PARAM_MAX = '{
+        ADDR_W:   AXI4_ADDR_W_MAX,
+        DATA_W:   AXI4_DATA_W_MAX,
+        ID_W:     AXI4_ID_W_MAX,
+        AWUSER_W: AXI4_USER_W_MAX,
+        WUSER_W:  AXI4_USER_W_MAX,
+        BUSER_W:  AXI4_USER_W_MAX,
+        ARUSER_W: AXI4_USER_W_MAX,
+        RUSER_W:  AXI4_USER_W_MAX
+    };
+
+    function automatic int unsigned axi4_max2(int unsigned a, int unsigned b);
+        return (a > b) ? a : b;
+    endfunction
+
+    // The widest packed stream of any channel in any configuration: the
+    // transactors' class-facing streams carry beats at this width.
+    localparam int AXI4_STREAM_W_MAX =
+        axi4_max2(axi4_max2(axi4_ax_bits(AXI4_PARAM_MAX, 1'b0),
+                            axi4_ax_bits(AXI4_PARAM_MAX, 1'b1)),
+                  axi4_max2(axi4_max2(axi4_wd_bits(AXI4_PARAM_MAX),
+                                      axi4_b_bits(AXI4_PARAM_MAX)),
+                            axi4_r_bits(AXI4_PARAM_MAX)));
+
+    // The five channels, indexing the transactors' streams.
+    typedef enum `AXI4_LOGIC [2:0] {
+        AXI4_CH_AW = 0,
+        AXI4_CH_W  = 1,
+        AXI4_CH_B  = 2,
+        AXI4_CH_AR = 3,
+        AXI4_CH_R  = 4
+    } axi4_ch_e;
+    localparam int AXI4_N_CH = 5;
+
     /* verilator lint_on UNUSEDPARAM */
 endpackage
