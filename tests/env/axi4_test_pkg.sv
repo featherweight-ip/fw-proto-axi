@@ -134,6 +134,43 @@ package axi4_test_pkg;
         endfunction
     endclass
 
+    // L2 over memory: manager adapter -> link -> subordinate adapter ->
+    // axi4_mem_model; fw_mem_if views of the manager in two widths:
+    // m32 (narrow single beats) and m128 (two-beat bursts on the 64-bit bus).
+    class axi4_mem_env extends axi4_env_base;
+        axi4_mgr_adapter mgr;
+        axi4_sub_adapter sub;
+        axi4_mem_model   mem;
+        axi4_to_mem #(logic [31:0], logic [31:0], logic [3:0])   m32;
+        axi4_to_mem #(logic [31:0], logic [127:0], logic [15:0]) m128;
+
+        function new(string name, fw_component parent); super.new(name, parent); endfunction
+
+        function void build();
+            mgr  = new("mgr", this, cfg);
+            sub  = new("sub", this, cfg);
+            mem  = new("mem", this, cfg);
+            m32  = new("m32", this, cfg);
+            m128 = new("m128", this, cfg);
+        endfunction
+
+        function void connect();
+            super.connect();
+            sub.tgt.connect(mem.xact);
+            m32.xact.connect(mgr.xact);
+            m128.xact.connect(mgr.xact);
+        endfunction
+
+        virtual function bit idle();
+            return mgr.idle() && sub.idle() && mgr.n_errors + sub.n_errors == 0;
+        endfunction
+
+        virtual function void clear();
+            mem.clear();
+            sub.max_delay = 0;
+        endfunction
+    endclass
+
     // ---- beat generators. Every beat is random and pre-masked to the
     // configuration; address beats are legal bursts (A3.4.1).
     function automatic logic [1023:0] rand_bits();

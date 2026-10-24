@@ -20,4 +20,6 @@ package fw_proto_axi4_pkg;
     `include "axi4_xact.svh"
     `include "axi4_mgr_adapter.svh"
     `include "axi4_sub_adapter.svh"
+    `include "axi4_mem_model.svh"
+    `include "axi4_to_mem.svh"
 endpackage
