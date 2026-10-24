@@ -202,7 +202,6 @@ fragment:
         with:
           name: "l2_basic-${{ this.image }}"
 
-
   # ---- suite: l2_mem
   - name: l2-mem-tests
     uses: std.FileSet
