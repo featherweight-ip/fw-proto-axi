@@ -66,3 +66,6 @@ package:
   - root: fv-cover
     desc: Reachability of legal AXI4 behaviour under the pin checker's rules
     needs: [formal.checker-cover, formal.cover-b2b]
+  - root: fv-teeth
+    desc: Planted bugs in slice, cores and checker must each fail formal
+    needs: [formal.teeth]

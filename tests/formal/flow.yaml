@@ -5,6 +5,8 @@
 #                       checker's rules, all assumed (they are not vacuous)
 #                       and of the back-to-back cores (axi4_fv.sv, FV_COVER)
 #   dfm run fv          BMC of the back-to-back cores (axi4_fv.sv)
+#   dfm run fv-teeth    planted bugs (slice, cores, checker) must each be
+#                       caught (tests/formal/teeth.sh)
 #   dfm run fv-prove    unbounded proof of axi4_slice (axi4_slice_fv.sv),
 #                       the cores' only state; the checker-level properties
 #                       of the back-to-back harness are BMC-only (abc pdr
@@ -76,3 +78,10 @@ fragment:
     run: |
       set -e
       FV_DEFINES=-DFV_COVER "${{ rootdir }}/tests/formal/run_sby.sh" cover 16 "$TASK_RUNDIR"
+
+  - name: teeth
+    uptodate: false
+    shell: bash
+    run: |
+      set -e
+      "${{ rootdir }}/tests/formal/teeth.sh" "$TASK_RUNDIR"
