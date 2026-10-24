@@ -70,6 +70,15 @@ fragment:
       include: [axi4_l1_harness.sv]
       incdirs: [.]
 
+  - name: l1-harness-xtor
+    uses: std.FileSet
+    needs: [test-env, fw.proto.axi.xtor-class, fw.proto.axi.checker]
+    with:
+      type: systemVerilogSource
+      base: env/xtor
+      include: [axi4_l1_harness.sv]
+      incdirs: [.]
+
   - name: l2-harness-tlm
     uses: std.FileSet
     needs: [test-env]
@@ -79,12 +88,30 @@ fragment:
       include: [axi4_l2_harness.sv]
       incdirs: [.]
 
+  - name: l2-harness-xtor
+    uses: std.FileSet
+    needs: [test-env, fw.proto.axi.xtor-class, fw.proto.axi.checker]
+    with:
+      type: systemVerilogSource
+      base: env/xtor
+      include: [axi4_l2_harness.sv]
+      incdirs: [.]
+
   - name: mem-harness-tlm
     uses: std.FileSet
     needs: [test-env]
     with:
       type: systemVerilogSource
       base: env/tlm
+      include: [axi4_mem_harness.sv]
+      incdirs: [.]
+
+  - name: mem-harness-xtor
+    uses: std.FileSet
+    needs: [test-env, fw.proto.axi.xtor-class, fw.proto.axi.checker]
+    with:
+      type: systemVerilogSource
+      base: env/xtor
       include: [axi4_mem_harness.sv]
       incdirs: [.]
 
@@ -108,11 +135,15 @@ fragment:
     passthrough: all
     needs: [l1-harness-tlm, l1-basic-runner]
 
+  - name: l1-basic-bench-xtor
+    passthrough: all
+    needs: [l1-harness-xtor, l1-basic-runner]
+
   - name: l1-basic-img
     strategy:
       select:
         axes:
-          view: [tlm]
+          view: [tlm, xtor]
       body:
       - uses: hdlsim.SimImage
         needs: [svunit, "l1-basic-bench-${{ this.view }}", flags-img]
@@ -124,7 +155,7 @@ fragment:
     strategy:
       select:
         axes:
-          view: [tlm]
+          view: [tlm, xtor]
       body:
       - uses: hdlsim.SimRun
         needs: ["l1-basic-img.${{ this.view }}", "flags-run-${{ build }}"]
@@ -139,7 +170,7 @@ fragment:
     - std.Test: {name: l1_basic}
     strategy:
       matrix:
-        image: [tlm]
+        image: [tlm, xtor]
       body:
       - name: "${{ this.image }}"
         uses: hdltest.svunit.Check
@@ -165,11 +196,15 @@ fragment:
     passthrough: all
     needs: [l2-harness-tlm, l2-basic-runner]
 
+  - name: l2-basic-bench-xtor
+    passthrough: all
+    needs: [l2-harness-xtor, l2-basic-runner]
+
   - name: l2-basic-img
     strategy:
       select:
         axes:
-          view: [tlm]
+          view: [tlm, xtor]
       body:
       - uses: hdlsim.SimImage
         needs: [svunit, "l2-basic-bench-${{ this.view }}", flags-img]
@@ -181,7 +216,7 @@ fragment:
     strategy:
       select:
         axes:
-          view: [tlm]
+          view: [tlm, xtor]
       body:
       - uses: hdlsim.SimRun
         needs: ["l2-basic-img.${{ this.view }}", "flags-run-${{ build }}"]
@@ -194,7 +229,7 @@ fragment:
     - std.Test: {name: l2_basic}
     strategy:
       matrix:
-        image: [tlm]
+        image: [tlm, xtor]
       body:
       - name: "${{ this.image }}"
         uses: hdltest.svunit.Check
@@ -220,11 +255,15 @@ fragment:
     passthrough: all
     needs: [mem-harness-tlm, l2-mem-runner]
 
+  - name: l2-mem-bench-xtor
+    passthrough: all
+    needs: [mem-harness-xtor, l2-mem-runner]
+
   - name: l2-mem-img
     strategy:
       select:
         axes:
-          view: [tlm]
+          view: [tlm, xtor]
       body:
       - uses: hdlsim.SimImage
         needs: [svunit, "l2-mem-bench-${{ this.view }}", flags-img]
@@ -236,7 +275,7 @@ fragment:
     strategy:
       select:
         axes:
-          view: [tlm]
+          view: [tlm, xtor]
       body:
       - uses: hdlsim.SimRun
         needs: ["l2-mem-img.${{ this.view }}", "flags-run-${{ build }}"]
@@ -249,7 +288,7 @@ fragment:
     - std.Test: {name: l2_mem}
     strategy:
       matrix:
-        image: [tlm]
+        image: [tlm, xtor]
       body:
       - name: "${{ this.image }}"
         uses: hdltest.svunit.Check
