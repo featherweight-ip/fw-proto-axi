@@ -51,3 +51,13 @@ fragment:
       base: class
       include: [fw_proto_axi4_pkg.sv]
       incdirs: [.]
+
+  # The bridges between the class layer and the transactors.
+  - export: xtor-class
+    uses: std.FileSet
+    needs: [class, xtor-sv]
+    with:
+      type: systemVerilogSource
+      base: class
+      include: [fw_proto_axi4_xtor_pkg.sv]
+      incdirs: [.]
