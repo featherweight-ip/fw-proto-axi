@@ -149,5 +149,29 @@ module l1_basic_unit_test;
         `FAIL_UNLESS(c.compatible(env.cfg) == id_w)
     `SVTEST_END
 
+    // Stream pack/unpack: unpack(pack(b)) == cfg.mask(b), at the test
+    // configuration, with ID/USER absent, and at the widest one.
+    `SVTEST(wire_round_trip)
+        axi4_cfg cs[3];
+        cs[0] = axi4_cfg::from_param(AXI4_TEST_PARAM);
+        cs[1] = new(12, 8, 0);
+        cs[2] = axi4_cfg::from_param(AXI4_PARAM_MAX);
+        foreach (cs[k]) begin
+            for (int i = 0; i < 20; i++) begin
+                axi4_aw_beat_t a = axi4_aw_beat_t'({rand_bits(), rand_bits()});
+                axi4_ar_beat_t r = axi4_ar_beat_t'({rand_bits(), rand_bits()});
+                axi4_w_beat_t  w = axi4_w_beat_t'({rand_bits(), rand_bits()});
+                axi4_b_beat_t  b = axi4_b_beat_t'({rand_bits(), rand_bits()});
+                axi4_r_beat_t  d = axi4_r_beat_t'({rand_bits(), rand_bits()});
+                axi4_cfg c = cs[k];
+                `FAIL_UNLESS(axi4_wire::unpack_aw(c, axi4_wire::pack_aw(c, a)) == c.mask_aw(a))
+                `FAIL_UNLESS(axi4_wire::unpack_ar(c, axi4_wire::pack_ar(c, r)) == c.mask_ar(r))
+                `FAIL_UNLESS(axi4_wire::unpack_w(c, axi4_wire::pack_w(c, w)) == c.mask_w(w))
+                `FAIL_UNLESS(axi4_wire::unpack_b(c, axi4_wire::pack_b(c, b)) == c.mask_b(b))
+                `FAIL_UNLESS(axi4_wire::unpack_r(c, axi4_wire::pack_r(c, d)) == c.mask_r(d))
+            end
+        end
+    `SVTEST_END
+
     `SVUNIT_TESTS_END
 endmodule
