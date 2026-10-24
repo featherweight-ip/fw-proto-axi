@@ -39,15 +39,19 @@ module axi4_checker_fv
 
     // Scenario history.
     logic       aw_seen, w_first, b_seen, r_mid;
+    logic       w_early, w1_done;  // W before any AW; first W burst done
     logic [0:0] aw_first_id, r_mid_id;
     logic [3:0] r_run;  // beats of the R burst in progress, one ID at a time
     always_ff @(posedge aclk) begin
         if (!aresetn) begin
             aw_seen <= 1'b0;  w_first <= 1'b0;  b_seen <= 1'b0;
             r_mid <= 1'b0;  aw_first_id <= '0;  r_mid_id <= '0;  r_run <= '0;
+            w_early <= 1'b0;  w1_done <= 1'b0;
         end else begin
             if (aw_hs && !aw_seen) begin aw_seen <= 1'b1;  aw_first_id <= awid; end
             if (w_hs && wlast && !aw_seen && !aw_hs) w_first <= 1'b1;
+            if (w_hs && !aw_seen && !aw_hs) w_early <= 1'b1;
+            if (w_hs && wlast) w1_done <= 1'b1;
             if (b_hs) b_seen <= 1'b1;
             if (r_hs) begin
                 r_mid    <= !rlast;
@@ -72,6 +76,12 @@ module axi4_checker_fv
             // A WRAP burst, an exclusive read.
             cover (aw_hs && awburst == 2'b10 && awlen == 8'd3);
             cover (arvalid && arready && arlock);
+            // A W beat on two of the four lanes (A3.4.4 strobes), in the
+            // first write-data burst, after its AW (so its lanes are checked).
+            cover (w_hs && wstrb == 4'b1100 && (aw_seen || aw_hs) && !w_early && !w1_done);
+            // EXOKAY on B and on R (A7.2: exclusive accesses only).
+            cover (b_hs && bresp == 2'b01);
+            cover (r_hs && rresp == 2'b01);
         end
     end
 endmodule

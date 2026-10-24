@@ -1,5 +1,5 @@
 // Passive AXI4 interface checker, pins only. IHI0022H A3.1.2, A3.2.1,
-// A3.3.1, A3.4.1, A5, A7.2.4. Synthesizable immediate assertions on
+// A3.3.1, A3.4.1, A3.4.4, A5, A7.2. Synthesizable immediate assertions on
 // registered history, so the same file serves sim and formal (SymbiYosys,
 // through sv2v).
 //
@@ -85,6 +85,22 @@ module axi4_checker
     localparam int unsigned CW        = $clog2(N + 1);  // counts 0..N
     localparam int unsigned XW        = $clog2(N);      // indexes 0..N-1
     localparam int unsigned BUS_BYTES = DW_ / 8;
+    // Address bits kept per write burst, for its byte lanes: the lanes of
+    // every beat depend only on the address within its 4KB page.
+    localparam int unsigned LW        = (AW_ < 12) ? AW_ : 12;
+
+    // Byte lanes of a beat (0-based index) of a burst (A3.4.2).
+    function automatic logic [BUS_BYTES-1:0] lanes(
+        logic [LW-1:0] addr, logic [2:0] size, logic [7:0] len,
+        logic [1:0] burst, logic [7:0] beat);
+        int unsigned lo, hi;
+        lo = axi4_beat_lower_lane(axi4_addr_t'(addr), axi4_size_e'(size), len,
+            axi4_burst_e'(burst), int'(beat), BUS_BYTES);
+        hi = axi4_beat_upper_lane(axi4_addr_t'(addr), axi4_size_e'(size), len,
+            axi4_burst_e'(burst), int'(beat), BUS_BYTES);
+        for (int i = 0; i < BUS_BYTES; i++)
+            lanes[i] = (i >= lo) && (i <= hi);
+    endfunction
 
     // A manager-side and a subordinate-side rule. Used as statements only
     // (never directly before an `else`). The inner begin/end keep an `else`
@@ -132,13 +148,18 @@ module axi4_checker
     // Write tracking. wq: accepted AW bursts in age order (compacted),
     // each with its ID, AWLEN and whether its last W beat has passed.
     // W data goes to the oldest entry without it (no interleaving in
-    // AXI4). we: completed write-data bursts that ran ahead of their AW
+    // AXI4). Each entry also keeps AWLOCK, and the address, size and
+    // burst type for the byte lanes of its beats. we: completed write-data bursts that ran ahead of their AW
     // (A3.3.1 lets W precede AW), by beat count - 1. wcur: beats of the
     // write-data burst in progress.
     // ------------------------------------------------------------------
     logic [N-1:0]          wq_v, wq_done;
     logic [N-1:0][IW_-1:0] wq_id;
     logic [N-1:0][7:0]     wq_len;
+    logic [N-1:0]          wq_lock;
+    logic [N-1:0][LW-1:0]  wq_addr;
+    logic [N-1:0][2:0]     wq_size;
+    logic [N-1:0][1:0]     wq_burst;
     logic [N-1:0][7:0]     we_len;
     logic [CW-1:0]         we_n;
     logic [7:0]            wcur;
@@ -172,6 +193,10 @@ module axi4_checker
     logic [N-1:0]          nwq_v, nwq_done;
     logic [N-1:0][IW_-1:0] nwq_id;
     logic [N-1:0][7:0]     nwq_len;
+    logic [N-1:0]          nwq_lock;
+    logic [N-1:0][LW-1:0]  nwq_addr;
+    logic [N-1:0][2:0]     nwq_size;
+    logic [N-1:0][1:0]     nwq_burst;
     logic [N-1:0][7:0]     nwe_len;
     logic [CW-1:0]         nwe_n;
     logic [7:0]            nwcur;
@@ -219,11 +244,19 @@ module axi4_checker
                 nwq_done[i] = d[src];
                 nwq_id[i]   = wq_id[src];
                 nwq_len[i]  = wq_len[src];
+                nwq_lock[i] = wq_lock[src];
+                nwq_addr[i] = wq_addr[src];
+                nwq_size[i] = wq_size[src];
+                nwq_burst[i] = wq_burst[src];
             end else begin
                 nwq_v[i]    = 1'b0;
                 nwq_done[i] = 1'b0;
                 nwq_id[i]   = '0;
                 nwq_len[i]  = '0;
+                nwq_lock[i] = 1'b0;
+                nwq_addr[i] = '0;
+                nwq_size[i] = '0;
+                nwq_burst[i] = '0;
             end
         end
         pos = wq_cnt - CW'(rm);
@@ -232,27 +265,35 @@ module axi4_checker
             nwq_done[XW'(pos)] = new_done;
             nwq_id[XW'(pos)]   = awid;
             nwq_len[XW'(pos)]  = awlen;
+            nwq_lock[XW'(pos)] = awlock;
+            nwq_addr[XW'(pos)] = awaddr[LW-1:0];
+            nwq_size[XW'(pos)] = awsize;
+            nwq_burst[XW'(pos)] = awburst;
         end
     end
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin
             wq_v <= '0;  wq_done <= '0;  wq_id <= '0;  wq_len <= '0;
+            wq_lock <= '0;  wq_addr <= '0;  wq_size <= '0;  wq_burst <= '0;
             we_len <= '0;  we_n <= '0;  wcur <= '0;
         end else begin
             wq_v <= nwq_v;  wq_done <= nwq_done;  wq_id <= nwq_id;  wq_len <= nwq_len;
+            wq_lock <= nwq_lock;  wq_addr <= nwq_addr;  wq_size <= nwq_size;
+            wq_burst <= nwq_burst;
             we_len <= nwe_len;  we_n <= nwe_n;  wcur <= nwcur;
         end
     end
 
     // ------------------------------------------------------------------
     // Read tracking. rq: accepted AR bursts in age order (compacted), each
-    // with its ID, ARLEN and beats returned. An R beat goes to the oldest
+    // with its ID, ARLEN, ARLOCK and beats returned. An R beat goes to the oldest
     // entry with its RID (same-ID order, A5.3; different IDs interleave).
     // ------------------------------------------------------------------
     logic [N-1:0]          rq_v;
     logic [N-1:0][IW_-1:0] rq_id;
     logic [N-1:0][7:0]     rq_len, rq_cnt;
+    logic [N-1:0]          rq_lock;
     logic                  r_ok;
     logic [XW-1:0]         r_idx;
     logic [CW-1:0]         rq_cnt_n;
@@ -270,6 +311,7 @@ module axi4_checker
     logic [N-1:0]          nrq_v;
     logic [N-1:0][IW_-1:0] nrq_id;
     logic [N-1:0][7:0]     nrq_len, nrq_cnt;
+    logic [N-1:0]          nrq_lock;
 
     always_comb begin
         logic [N-1:0][7:0] c;
@@ -286,11 +328,13 @@ module axi4_checker
                 nrq_id[i]  = rq_id[src];
                 nrq_len[i] = rq_len[src];
                 nrq_cnt[i] = c[src];
+                nrq_lock[i] = rq_lock[src];
             end else begin
                 nrq_v[i]   = 1'b0;
                 nrq_id[i]  = '0;
                 nrq_len[i] = '0;
                 nrq_cnt[i] = '0;
+                nrq_lock[i] = 1'b0;
             end
         end
         pos = rq_cnt_n - CW'(rm);
@@ -299,14 +343,16 @@ module axi4_checker
             nrq_id[XW'(pos)]  = arid;
             nrq_len[XW'(pos)] = arlen;
             nrq_cnt[XW'(pos)] = '0;
+            nrq_lock[XW'(pos)] = arlock;
         end
     end
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin
-            rq_v <= '0;  rq_id <= '0;  rq_len <= '0;  rq_cnt <= '0;
+            rq_v <= '0;  rq_id <= '0;  rq_len <= '0;  rq_cnt <= '0;  rq_lock <= '0;
         end else begin
             rq_v <= nrq_v;  rq_id <= nrq_id;  rq_len <= nrq_len;  rq_cnt <= nrq_cnt;
+            rq_lock <= nrq_lock;
         end
     end
 
@@ -358,6 +404,13 @@ module axi4_checker
             // W beat this cycle).
             if (aw_hs && !w_tgt_ok && we_n == '0) `AXI4_CHK_M(wcur <= awlen)
 
+            // A3.4.4: WSTRB HIGH only on the byte lanes of the beat. Checked
+            // where the beat's AW is known (not for data ahead of its AW).
+            if (w_hs && w_to_tgt) `AXI4_CHK_M((wstrb & ~lanes(wq_addr[w_tgt],
+                wq_size[w_tgt], wq_len[w_tgt], wq_burst[w_tgt], wcur)) == '0)
+            if (w_hs && w_to_new) `AXI4_CHK_M((wstrb & ~lanes(awaddr[LW-1:0],
+                awsize, awlen, awburst, wcur)) == '0)
+
             // Checker capacity (MAX_OUT).
             if (awvalid) `AXI4_CHK_M(wq_cnt < CW'(N))
             if (arvalid) `AXI4_CHK_M(rq_cnt_n < CW'(N))
@@ -366,11 +419,14 @@ module axi4_checker
             // A3.3.1, A5: B only for a write whose AW and last W beat have
             // both been accepted, with that write's ID.
             if (bvalid) `AXI4_CHK_S(b_ok)
+            // A7.2: EXOKAY only for an exclusive access.
+            if (bvalid && b_ok && bresp == AXI4_RESP_EXOKAY) `AXI4_CHK_S(wq_lock[b_idx])
 
             // A5: R only for an outstanding read with that ID; A3.4.1:
             // RLAST on, and only on, beat ARLEN+1.
             if (rvalid) `AXI4_CHK_S(r_ok)
             if (rvalid && r_ok) `AXI4_CHK_S(rlast == (rq_cnt[r_idx] == rq_len[r_idx]))
+            if (rvalid && r_ok && rresp == AXI4_RESP_EXOKAY) `AXI4_CHK_S(rq_lock[r_idx])
         end
 `ifndef FORMAL
         // No X on the controls out of reset, nor on a payload while VALID.

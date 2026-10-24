@@ -39,7 +39,7 @@ module l2_mem_unit_test;
         x.lock = lock;
         for (int unsigned n = 0; n < x.n_beats(); n++) begin
             x.data.push_back({128{8'h10 + 8'(n)}});
-            x.strb.push_back('1);
+            x.strb.push_back(beat_lanes(x, n, env.cfg.bus_bytes()));
             x.wuser.push_back('0);
         end
         return x;

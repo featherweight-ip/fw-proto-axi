@@ -235,6 +235,17 @@ package axi4_test_pkg;
         return cfg.mask_r(axi4_r_beat_t'(rand_bits()));
     endfunction
 
+    // The byte lanes of beat n of x on a bus of bus_bytes (A3.4.4: WSTRB
+    // may be HIGH only on these).
+    function automatic axi4_strb_t beat_lanes(axi4_xact x, int unsigned n,
+                                             int unsigned bus_bytes);
+        int unsigned lo = axi4_beat_lower_lane(x.addr, x.size, x.len, x.burst, n, bus_bytes);
+        int unsigned hi = axi4_beat_upper_lane(x.addr, x.size, x.len, x.burst, n, bus_bytes);
+        axi4_strb_t  m  = '0;
+        for (int unsigned i = lo; i <= hi; i++) m[i] = 1'b1;
+        return m;
+    endfunction
+
     // A random legal transaction (request half), pre-masked to cfg.
     function automatic axi4_xact rand_xact(axi4_cfg cfg, bit write);
         axi4_xact x = axi4_xact::from_ax(rand_ax(cfg, !write), write);
@@ -242,7 +253,7 @@ package axi4_test_pkg;
             for (int unsigned n = 0; n < x.n_beats(); n++) begin
                 axi4_w_beat_t w = rand_w(cfg);
                 x.data.push_back(w.data);
-                x.strb.push_back(w.strb);
+                x.strb.push_back(w.strb & beat_lanes(x, n, cfg.bus_bytes()));
                 x.wuser.push_back(w.user);
             end
         return x;

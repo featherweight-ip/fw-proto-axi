@@ -142,8 +142,9 @@ module l2_basic_unit_test;
         axi4_xact ok = axi4_xact::new_read('h3000, AXI4_SIZE_4, 1);
         env.tgt.err_lo = 'h2000; env.tgt.err_hi = 'h2fff;
         env.tgt.err_resp = AXI4_RESP_DECERR;
-        repeat (4) begin
-            w.data.push_back('1); w.strb.push_back('hf); w.wuser.push_back('0);
+        for (int unsigned n = 0; n < 4; n++) begin
+            w.data.push_back('1); w.wuser.push_back('0);
+            w.strb.push_back(beat_lanes(w, n, env.cfg.bus_bytes()));
         end
         env.mgr.xact.xact(w);
         `FAIL_UNLESS(w.resp === AXI4_RESP_DECERR)
