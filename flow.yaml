@@ -65,4 +65,4 @@ package:
     needs: [formal.prove]
   - root: fv-cover
     desc: Reachability of legal AXI4 behaviour under the pin checker's rules
-    needs: [formal.checker-cover]
+    needs: [formal.checker-cover, formal.cover-b2b]

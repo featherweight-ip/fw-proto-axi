@@ -6,7 +6,8 @@
 //   u_chk_p  the pins: every rule asserted;
 //   u_chk_s  subordinate user side: subordinate rules ASSUMED (legal
 //            responses in), manager rules asserted (requests out are legal).
-// A single reset at the start. `dfm run fv` (BMC).
+// A single reset at the start. `dfm run fv` (BMC); with FV_COVER, the
+// covers at the end (`dfm run fv-cover`).
 //
 // Checker capacity grows downstream: each core's AW slice holds up to 2
 // addresses while W data flows past, so the pins can see 2 more write-data
@@ -96,4 +97,41 @@ module axi4_fv
         .b_valid(s_b_valid),   .b_ready(s_b_ready),   .b_data(s_b_data),
         .ar_valid(s_ar_valid), .ar_ready(s_ar_ready), .ar_data(s_ar_data),
         .r_valid(s_r_valid),   .r_ready(s_r_ready),   .r_data(s_r_data));
+`ifdef FV_COVER
+    // Reachability (`dfm run fv-cover`): the assumptions leave the
+    // interesting traffic possible, so the BMC is not vacuous.
+    logic wr_long, rd_long, ar0, ar1_after0, r_seen;
+    always_ff @(posedge aclk) begin
+        if (!aresetn) begin
+            wr_long <= 1'b0; rd_long <= 1'b0;
+            ar0 <= 1'b0; ar1_after0 <= 1'b0; r_seen <= 1'b0;
+        end else begin
+            if (awvalid && awready && awlen != 8'd0) wr_long <= 1'b1;
+            if (arvalid && arready && arlen != 8'd0) rd_long <= 1'b1;
+            if (arvalid && arready && arid == 1'b0) ar0 <= 1'b1;
+            if (arvalid && arready && arid == 1'b1 && ar0) ar1_after0 <= 1'b1;
+            if (rvalid && rready) r_seen <= 1'b1;
+        end
+    end
+    logic w_hs_q;
+    always_ff @(posedge aclk) w_hs_q <= aresetn && wvalid && wready;
+
+    // r_data = {id, data, resp, last, user}: bit 1 is RLAST.
+    always_comb if (!init && aresetn) begin
+        // A burst write (len > 0) completes with B at the manager user side.
+        c_wr_burst: cover (wr_long && m_b_valid && m_b_ready);
+        // A burst read ends with RLAST at the manager user side.
+        c_rd_burst: cover (rd_long && m_r_valid && m_r_ready && m_r_data[1]);
+        // Out of order across IDs: the first R returned is for the later AR.
+        c_rd_reorder: cover (ar1_after0 && !r_seen && rvalid && rready && rid == 1'b1);
+        // Both slices of a channel full: subordinate AW (pins), manager W,
+        // subordinate R. (Manager AW full needs 4 writes in flight: more
+        // than MAX_OUT.)
+        c_sub_aw_full: cover (!awready);
+        c_mgr_w_full: cover (!m_w_ready);
+        c_sub_r_full: cover (!s_r_ready);
+        // Full throughput through both cores: W beats on consecutive cycles.
+        c_w_b2b: cover (w_hs_q && wvalid && wready);
+    end
+`endif
 endmodule

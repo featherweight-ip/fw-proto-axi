@@ -3,6 +3,7 @@
 # Formal checks of the pin checker (tests/formal/axi4_checker_fv.sv).
 #   dfm run fv-cover    reachability of legal AXI4 behaviour under the
 #                       checker's rules, all assumed (they are not vacuous)
+#                       and of the back-to-back cores (axi4_fv.sv, FV_COVER)
 #   dfm run fv          BMC of the back-to-back cores (axi4_fv.sv)
 #   dfm run fv-prove    unbounded proof of axi4_slice (axi4_slice_fv.sv),
 #                       the cores' only state; the checker-level properties
@@ -66,3 +67,12 @@ fragment:
       set -e
       FV_TOP=axi4_slice_fv FV_ENGINE="abc pdr" "${{ rootdir }}/tests/formal/run_sby.sh" prove 8 "$TASK_RUNDIR"
       FV_TOP=axi4_slice_fv FV_DEFINES=-DFV_COVER "${{ rootdir }}/tests/formal/run_sby.sh" cover 8 "$TASK_RUNDIR"
+
+  # Covers of the back-to-back harness (axi4_fv.sv, FV_COVER): burst
+  # write/read complete, reorder across IDs, slices full, full throughput.
+  - name: cover-b2b
+    uptodate: false
+    shell: bash
+    run: |
+      set -e
+      FV_DEFINES=-DFV_COVER "${{ rootdir }}/tests/formal/run_sby.sh" cover 16 "$TASK_RUNDIR"
