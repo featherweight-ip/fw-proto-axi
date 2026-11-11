@@ -51,3 +51,11 @@ package:
     - name: sv-weave
       url: https://github.com/sv-weave/sv-weave.git
       dep-set: use
+    # Reference IPs for the extern-wrapping tests (tests/ip, plan P6.4). RTL
+    # only, read as sources; nothing here builds them.
+    - name: verilog-axi
+      url: https://github.com/alexforencich/verilog-axi.git
+      type: raw
+    - name: wb2axip
+      url: https://github.com/ZipCPU/wb2axip.git
+      type: raw

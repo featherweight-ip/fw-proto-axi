@@ -1,0 +1,300 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+#
+# Reference IPs wrapped as extern components (plan P6.4, docs/p6-abstractors.md).
+# Each IP test runs in two passes:
+#   1. <ip>-gen elaborates the class description and emits the netlist module(s)
+#      and <top>_sim.sv into its run directory;
+#   2. <ip>-run compiles the emitted files with the IP's RTL and runs the tests
+#      through the inserted abstractors.
+# <ip>-netlist compares the emitted netlist with a hand-written one, and
+# <ip>-synth synthesizes it with Yosys (checks in ip_checks.py). The tests share
+# common/ip_axi_tb_pkg.sv. `dfm run ip` runs them all; +plant on a run plants a
+# data error the checks must catch.
+fragment:
+  name: ip
+
+  tasks:
+  # What every IP test's packages build on: the woven package with the
+  # abstractor glue, the behaviour, and the shared test bench.
+  - name: tb-common
+    uses: std.FileSet
+    needs: [fw.proto.axi.behav-xtor]
+    with:
+      type: systemVerilogSource
+      base: common
+      include: [ip_axi_tb_pkg.sv]
+
+  # The emitted .sv files of a generate pass, as sources (modules first, then
+  # <top>_sim.sv, which instantiates them).
+  - name: emitted
+    shell: pytask
+    consumes: all
+    passthrough: none
+    run: |
+      import os
+      from dv_flow.mgr import TaskDataResult, FileSet
+      rundirs = {fs.basedir for fs in input.inputs
+                 if getattr(fs, "filetype", "") in ("simLog", "simRunDir")}
+      files = []
+      for d in rundirs:
+          for f in sorted(os.listdir(d)):
+              if f.endswith(".sv"):
+                  files.append((d, f))
+      files.sort(key=lambda x: x[1].endswith("_sim.sv"))
+      if not any(f.endswith("_sim.sv") for _, f in files):
+          print("emitted: no <top>_sim.sv in %s; inputs %s" % (rundirs,
+                [(type(fs).__name__, getattr(fs, "filetype", None), getattr(fs, "basedir", None))
+                 for fs in input.inputs]))
+          return TaskDataResult(status=1)
+      return TaskDataResult(status=0, changed=True, output=[FileSet(
+          src=input.name, filetype="systemVerilogSource", basedir=files[0][0],
+          files=[f for _, f in files])])
+
+  # ---- axi_ram (verilog-axi)
+  - name: axi-ram-rtl
+    uses: std.FileSet
+    with:
+      type: verilogSource
+      base: ../../packages/verilog-axi/rtl
+      include: [axi_ram.v]
+
+  - name: axi-ram-pkg
+    uses: std.FileSet
+    needs: [tb-common]
+    with:
+      type: systemVerilogSource
+      base: axi_ram
+      include: [axi_ram_ip_pkg.sv]
+
+  - name: axi-ram-gen-top
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: axi_ram
+      include: [axi_ram_gen.sv]
+
+  # The generate pass is a tool step, not a test: always Verilator, whose
+  # SimRun hands its run directory on even when up to date.
+  - name: axi-ram-gen-img
+    uses: hdlsim.vlt.SimImage
+    needs: [axi-ram-pkg, axi-ram-gen-top]
+    with:
+      top: [axi_ram_gen]
+      args: [--timing]
+
+  - name: axi-ram-gen
+    uses: hdlsim.vlt.SimRun
+    needs: [axi-ram-gen-img]
+
+  - name: axi-ram-emitted
+    uses: emitted
+    needs: [axi-ram-gen]
+
+  - name: axi-ram-tb
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: axi_ram
+      include: [axi_ram_tb.sv]
+
+  - name: axi-ram-img
+    uses: hdlsim.SimImage
+    needs: [axi-ram-rtl, axi-ram-pkg, axi-ram-emitted, axi-ram-tb, flags-img]
+    with:
+      sim: "${{ sim }}"
+      top: [axi_ram_tb]
+
+  - name: axi-ram-run
+    uses: hdlsim.SimRun
+    needs: [axi-ram-img, "flags-run-${{ build }}"]
+    with:
+      sim: "${{ sim }}"
+
+  - name: axi-ram-netlist
+    shell: pytask
+    needs: [axi-ram-emitted]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys; sys.path.insert(0, input.srcdir)
+      import ip_checks
+      return ip_checks.netlist(input, "ram_sys", "axi_ram/ram_sys_ref.sv")
+
+  - name: axi-ram-synth
+    shell: pytask
+    needs: [axi-ram-emitted, axi-ram-rtl]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys; sys.path.insert(0, input.srcdir)
+      import ip_checks
+      return ip_checks.synth(input, "ram_sys")
+
+  - name: axi-ram
+    needs: [axi-ram-run, axi-ram-netlist, axi-ram-synth]
+
+  # ---- demofull (wb2axip)
+  - name: demofull-rtl
+    uses: std.FileSet
+    with:
+      type: verilogSource
+      base: ../../packages/wb2axip/rtl
+      include: [demofull.v, skidbuffer.v, axi_addr.v]
+
+  - name: demofull-pkg
+    uses: std.FileSet
+    needs: [tb-common]
+    with:
+      type: systemVerilogSource
+      base: demofull
+      include: [demofull_ip_pkg.sv]
+
+  - name: demofull-gen-top
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: demofull
+      include: [demofull_gen.sv]
+
+  # The generate pass is a tool step, not a test: always Verilator, whose
+  # SimRun hands its run directory on even when up to date.
+  - name: demofull-gen-img
+    uses: hdlsim.vlt.SimImage
+    needs: [demofull-pkg, demofull-gen-top]
+    with:
+      top: [demofull_gen]
+      args: [--timing]
+
+  - name: demofull-gen
+    uses: hdlsim.vlt.SimRun
+    needs: [demofull-gen-img]
+
+  - name: demofull-emitted
+    uses: emitted
+    needs: [demofull-gen]
+
+  - name: demofull-tb
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: demofull
+      include: [demofull_tb.sv]
+
+  - name: demofull-img
+    uses: hdlsim.SimImage
+    needs: [demofull-rtl, demofull-pkg, demofull-emitted, demofull-tb, flags-img]
+    with:
+      sim: "${{ sim }}"
+      top: [demofull_tb]
+
+  - name: demofull-run
+    uses: hdlsim.SimRun
+    needs: [demofull-img, "flags-run-${{ build }}"]
+    with:
+      sim: "${{ sim }}"
+
+  - name: demofull-netlist
+    shell: pytask
+    needs: [demofull-emitted]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys; sys.path.insert(0, input.srcdir)
+      import ip_checks
+      return ip_checks.netlist(input, "demo_sys", "demofull/demo_sys_ref.sv")
+
+  - name: demofull-synth
+    shell: pytask
+    needs: [demofull-emitted, demofull-rtl]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys; sys.path.insert(0, input.srcdir)
+      import ip_checks
+      return ip_checks.synth(input, "demo_sys")
+
+  - name: demofull
+    needs: [demofull-run, demofull-netlist, demofull-synth]
+
+  # ---- axi_crossbar (verilog-axi)
+  - name: axi-crossbar-rtl
+    uses: std.FileSet
+    with:
+      type: verilogSource
+      base: ../../packages/verilog-axi/rtl
+      include: [axi_crossbar.v, axi_crossbar_wr.v, axi_crossbar_rd.v, axi_crossbar_addr.v, axi_register_wr.v, axi_register_rd.v, arbiter.v, priority_encoder.v]
+
+  - name: axi-crossbar-pkg
+    uses: std.FileSet
+    needs: [tb-common]
+    with:
+      type: systemVerilogSource
+      base: axi_crossbar
+      include: [axi_crossbar_ip_pkg.sv]
+
+  - name: axi-crossbar-gen-top
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: axi_crossbar
+      include: [axi_crossbar_gen.sv]
+
+  # The generate pass is a tool step, not a test: always Verilator, whose
+  # SimRun hands its run directory on even when up to date.
+  - name: axi-crossbar-gen-img
+    uses: hdlsim.vlt.SimImage
+    needs: [axi-crossbar-pkg, axi-crossbar-gen-top]
+    with:
+      top: [axi_crossbar_gen]
+      args: [--timing]
+
+  - name: axi-crossbar-gen
+    uses: hdlsim.vlt.SimRun
+    needs: [axi-crossbar-gen-img]
+
+  - name: axi-crossbar-emitted
+    uses: emitted
+    needs: [axi-crossbar-gen]
+
+  - name: axi-crossbar-tb
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: axi_crossbar
+      include: [axi_crossbar_tb.sv]
+
+  - name: axi-crossbar-img
+    uses: hdlsim.SimImage
+    needs: [axi-crossbar-rtl, axi-crossbar-pkg, axi-crossbar-emitted, axi-crossbar-tb, flags-img]
+    with:
+      sim: "${{ sim }}"
+      top: [axi_crossbar_tb]
+
+  - name: axi-crossbar-run
+    uses: hdlsim.SimRun
+    needs: [axi-crossbar-img, "flags-run-${{ build }}"]
+    with:
+      sim: "${{ sim }}"
+
+  - name: axi-crossbar-netlist
+    shell: pytask
+    needs: [axi-crossbar-emitted]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys; sys.path.insert(0, input.srcdir)
+      import ip_checks
+      return ip_checks.netlist(input, "xbar_sys", "axi_crossbar/xbar_sys_ref.sv")
+
+  - name: axi-crossbar-synth
+    shell: pytask
+    needs: [axi-crossbar-emitted, axi-crossbar-rtl]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys; sys.path.insert(0, input.srcdir)
+      import ip_checks
+      return ip_checks.synth(input, "xbar_sys")
+
+  - name: axi-crossbar
+    needs: [axi-crossbar-run, axi-crossbar-netlist, axi-crossbar-synth]

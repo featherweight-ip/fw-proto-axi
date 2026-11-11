@@ -24,6 +24,7 @@ package:
   - src/flow.yaml
   - tests/flow.yaml
   - tests/formal/flow.yaml
+  - tests/ip/flow.yaml
 
   tasks:
   # Synthesizable sources: types, checker, cores (transactors later).
@@ -81,6 +82,11 @@ package:
   # What CI runs on every commit.
   - override: smoke
     needs: [suites.types, suites.chk-teeth, suites.l1-basic, suites.l2-basic, suites.l2-mem]
+
+  # Reference IPs behind the class API (tests/ip/flow.yaml).
+  - root: ip
+    desc: Wrapped reference IPs driven through inserted abstractors; netlist compare; Yosys synth
+    needs: [ip.axi-ram, ip.demofull, ip.axi-crossbar]
 
   # Formal (tests/formal/flow.yaml).
   - root: fv
