@@ -1,0 +1,17 @@
+# sv-weave configuration for the AXI4 core with its pin-level transactors
+# (src/flow.yaml: woven-xtor): what sv-weave.yaml derives, plus the
+# axi4_{mgr,sub,mon}_xtor modules, their handle interfaces and bridges. The
+# inputs add fw-hdl (sv-src, rv-src); fw_root.sv elaborates only under a top, so
+# the stub top keeps the weave's elaboration to the packages.
+sv-weave:
+  binding: fw_proto_weave:FwProtoBinding
+  plugin-path: [../../fw_proto/python]
+  packages:
+    include: [fw_proto_axi4_core_pkg]
+  sources:
+    files: [xtor_weave_top.sv]
+    top: [xtor_weave_top]
+  weavers:
+  - name: fw_proto_weave:FwProtoWeaver
+    options:
+      xtor: true

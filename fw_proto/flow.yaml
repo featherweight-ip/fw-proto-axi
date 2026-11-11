@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
+#
+# fw_proto: the protocol-agnostic runtime (SV) and weavers (python/fw_proto_weave).
+# It moves to fw-hdl once a second protocol package uses it (plan D2).
+fragment:
+  tasks:
+  # fw_proto_pkg builds on fw-hdl's component model (fw_component,
+  # fw_endpoint, fw_extern_map): the abstractor runtime (fw_proto_abs.svh).
+  - export: fw-proto-sv
+    uses: std.FileSet
+    needs: [fw-hdl.hdl.sv-src]
+    with:
+      type: systemVerilogSource
+      base: src
+      include: [fw_proto_pkg.sv]
+      incdirs: [.]

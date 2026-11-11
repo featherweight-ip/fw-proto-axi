@@ -1,0 +1,14 @@
+# sv-weave configuration for the AXI4 core (docs/design-new-style.md §6).
+# The sources come from the dv-flow task's inputs (src/flow.yaml: woven).
+sv-weave:
+  binding: fw_proto_weave:FwProtoBinding
+  plugin-path: [../../fw_proto/python]
+  packages:
+    include: [fw_proto_axi4_core_pkg]
+  # fw_proto_pkg brings fw-hdl, whose fw_root.sv elaborates only under a
+  # top: the stub top keeps the weave's elaboration to the packages.
+  sources:
+    files: [xtor_weave_top.sv]
+    top: [xtor_weave_top]
+  weavers:
+  - name: fw_proto_weave:FwProtoWeaver
