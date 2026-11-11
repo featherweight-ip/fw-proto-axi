@@ -37,3 +37,17 @@ package:
     - name: dv-flow-libhdllint
       url: https://github.com/dv-flow/dv-flow-libhdllint.git
       dep-set: default-dev
+    # yosys + sby: the formal suites (fv, fv-prove, fv-cover) and synthesis
+    # checks. Also a dependency of fw-hdl; declared here because this package
+    # uses it directly. Same entry as fw-hdl's, so one checkout serves both.
+    - name: yosys
+      url: https://github.com/edapack/yosys-bin
+      src: gh-rls
+      cache: true
+      dep-set: default
+    # Generates the package's derived classes (listeners, proxies, bases,
+    # channel APIs, bridges) from the core spec. Editable checkout: fixes
+    # needed by this package are made in packages/sv-weave on a branch.
+    - name: sv-weave
+      url: https://github.com/sv-weave/sv-weave.git
+      dep-set: use

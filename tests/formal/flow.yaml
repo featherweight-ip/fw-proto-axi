@@ -85,3 +85,32 @@ fragment:
     run: |
       set -e
       "${{ rootdir }}/tests/formal/teeth.sh" "$TASK_RUNDIR"
+
+  # The generated transactors' cores back to back (tests/formal/axi4_fv_ns.sv):
+  # axi4_mgr_xtor_core -> pins -> axi4_sub_xtor_core, the same three checkers as
+  # axi4_fv. fv_ns.sh takes the class-free RTL from the woven-xtor weave.
+  - name: bmc-ns
+    uptodate: false
+    needs: [fw.proto.axi.woven-xtor, fw-hdl.hdl.rv-src]
+    shell: bash
+    run: |
+      set -e
+      "${{ rootdir }}/tests/formal/fv_ns.sh" bmc 16 "$TASK_RUNDIR"
+
+  - name: cover-b2b-ns
+    uptodate: false
+    needs: [fw.proto.axi.woven-xtor, fw-hdl.hdl.rv-src]
+    shell: bash
+    run: |
+      set -e
+      "${{ rootdir }}/tests/formal/fv_ns.sh" cover 16 "$TASK_RUNDIR"
+
+  # Planted bugs in copies of the generated cores and fw-hdl's rv core: each
+  # BMC must fail.
+  - name: teeth-ns
+    uptodate: false
+    needs: [fw.proto.axi.woven-xtor, fw-hdl.hdl.rv-src]
+    shell: bash
+    run: |
+      set -e
+      "${{ rootdir }}/tests/formal/fv_ns.sh" teeth 10 "$TASK_RUNDIR"

@@ -1,0 +1,12 @@
+# The weave suite's own weave: the AXI4 core plus the synthetic API, in one run
+# (two Weave tasks in one image would both define sv_weave_init_pkg).
+sv-weave:
+  binding: fw_proto_weave:FwProtoBinding
+  plugin-path: [../../fw_proto/python]
+  # fw_proto_pkg brings fw-hdl, whose fw_root.sv elaborates only under a
+  # top: the stub top keeps the weave's elaboration to the packages.
+  sources:
+    files: [weave_ns_top.sv]
+    top: [weave_ns_top]
+  weavers:
+  - name: fw_proto_weave:FwProtoWeaver

@@ -1,0 +1,15 @@
+# The P1 pilot (plan §5 P1): the fw-proto weaver on fw-hdl's ready/valid APIs,
+# which carry no fw_api attribute, so they are named with `include`. Proves the
+# weavers on a `#(type T)` header, independent of AXI4.
+sv-weave:
+  binding: fw_proto_weave:FwProtoBinding
+  plugin-path: [../../../fw_proto/python]
+  sources:
+    files: [rv_weave_top.sv]
+    top: [rv_weave_top]
+  packages:
+    include: [fw_rv_pkg]
+  weavers:
+  - name: fw_proto_weave:FwProtoWeaver
+    options:
+      include: [fw_rv_initiator_if, fw_rv_target_if, fw_rv_monitor_if]
