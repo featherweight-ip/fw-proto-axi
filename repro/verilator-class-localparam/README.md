@@ -1,6 +1,6 @@
 # Verilator 5.055: internal fault on a class localparam from `$bits(type param)`
 
-Found 2026-11-11 in `axi4_to_mem` (`src/behav/fw_proto_axi4_behav_pkg.sv`, plan P5).
+Found 2026-11-11 in `axi4_to_mem` (`src/behav/axi4_to_mem.svh`, plan P5).
 Reduced from that class by line deletion, then cleaned up by hand. Not yet reported upstream.
 
 ## Reproduce

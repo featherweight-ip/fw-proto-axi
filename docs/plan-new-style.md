@@ -15,12 +15,12 @@ be able to resume from this file alone.
 | P3 Bundle derivatives + struct-port runtime | mostly done | runtime, field tables, role ports, inboxes, sprint/compare done; pin-map presets wait for fw-hdl `pin`/`prefix` (P6) |
 | P4 Transactors and back-to-back | done | `l1_ns` (2 views × 3 P), stalls by path, `lint-xtor-ns`, `fv` on the generated cores (`axi4_fv_ns`); core spec split into a synthesizable and a class package (D-fv) |
 | P5 Behaviour: adapters, memory model, transaction API | done | streaming `axi4_burst_if` + convenience shim (D10); `l2_ns` 24/24, `l2_mem_ns` 27/27 in both views; `dfm run tests` 18 of 19 (the old `l2_basic` xtor failure) |
-| P6 Abstractors, extern wrapping, reference IPs | in progress | runtime and glue done; `axi_ram`, `demofull`, `axi_crossbar` pass (`dfm run ip`); preset tests and docs open. See [p6-abstractors.md](p6-abstractors.md) |
-| P7 Rules in simulation | not started | |
+| P6 Abstractors, extern wrapping, reference IPs | done but the deadlock follow-up | `axi_ram`, `demofull`, `axi_crossbar`, presets pass (`dfm run ip`); D11 teeth 9/10 caught (one known gap). See [p6-abstractors.md](p6-abstractors.md), [reference-ips.md](reference-ips.md) |
+| P7 Rules in simulation | done (regression below) | rule library in `fw_proto/src`, nine AXI4 rules in `src/rules`; on every L1/L2/b2b link and every IP abstractor (by path); `rules_teeth_ns` 17/17 both views, `rules_pins_ns` 13/13 (agrees with `axi4_checker`). See [rules.md](rules.md) |
 | P8 Retire the old package | not started | |
 | Later: formal generation (A4), monitor transactions (A5), systems (A6) | not planned in detail | §9 |
 
-**Last update:** 2026-11-11 (P5). The derivation runs as dv-flow tasks: `dfm run woven`
+**Last update:** 2026-11-12 (P7; status notes below). The derivation runs as dv-flow tasks: `dfm run woven`
 (`src/flow.yaml`, `svweave.Weave` + `src/weave/sv-weave.yaml`) writes
 `fw_proto_axi4_core_pkg_woven.sv` to `rundir/fw.proto.axi.woven/woven/`. From the core it
 derives:
@@ -235,10 +235,52 @@ P6 status (2026-11-11, see [p6-abstractors.md](p6-abstractors.md)):
 - Follow-up: analysis for deadlocks of the two-way API, e.g. a response call that blocks
   on a channel the same process must drain (D11 rule 2). Possible hosts: the generated
   listeners, or fw-hdl's debug tracking of blocked runnables.
-- Still open: D11 teeth; pin-map preset tests; `docs/reference-ips.md`; the old `l2_basic`
-  failure (P8).
+- D11 teeth (2026-11-11): `tests/teeth/behav_teeth.py` plants 10 bugs in the D11 paths
+  (blocking shim, both adapters, the xact target), runs `l2_ns`/`l2_mem_ns` in both views
+  and the crossbar, and restores the file; table in `rundir/teeth/summary.md`. The first
+  run caught 4 of 10. The misses were test gaps, now closed:
+  - a response inside the request call never reached the shim or the manager adapter
+    (the subordinate adapter always decouples): new `inline_responses`, over a direct
+    path `blk_d -> mgr_d -> isub` (a stub that answers inside the call);
+  - the shim serializes writes, so nothing overlapped two writes at the manager adapter:
+    new `concurrent_writers`, callers straight on `mgr_d` with a time unit per W beat;
+  - `test_target` answered in zero time, so per-ID order was never tested at the xact
+    target: `concurrent_ids` now delays each call 0..300 at random and answers SLVERR in
+    the upper half of the address space (a B given to the wrong caller shows).
 
-**Next action:** D11 teeth (planted bugs), preset tests, `docs/reference-ips.md`.
+  Now 9 of 10 caught. Known gap: B sent from inside the subordinate adapter's response
+  call (`sub_b_inline`) only slows these topologies; it deadlocks only in a cycle, so it
+  belongs to the deadlock follow-up below. The burst-target checks moved into the env
+  (`check_bursts`), shared by `burst_fidelity` and `inline_responses`.
+- Pin-map presets: `tests/ip/presets`, in the `ip` root. `docs/reference-ips.md` written.
+- Regression after these: `l2_ns` 30/30 and `l2_mem_ns` 27/27 in both views; `dfm run ip`
+  passes (three IPs and presets); `lint-rtl` passes; pytest 17/17; `dfm run tests` fails
+  only the old `l2_basic` xtor (P8).
+- Still open: the deadlock analysis (follow-up above); the Jinja question below.
+
+- P7 (2026-11-12): rules in simulation, see [rules.md](rules.md).
+  - Library (`fw_proto/src`): `fw_rule`, `fw_count`, `fw_flag`, `fw_value`, `fw_any`,
+    `fw_rule_node`, `fw_rule_set`, `fw_rv_hold`. AXI4 (`src/rules`, filesets `rules` /
+    `rules-xtor`): `resp_match`, `r_burst`, `w_burst`, `b_order`, `burst_legal`,
+    `w_lanes`, `capacity`, `exclusive` (free form), `rv_hold` (pins).
+  - Attached in `xtor_ns`, `l1_ns`, `l2_ns`, `l2_mem_ns` and the three IPs; all pass.
+    The IP rules attach by path (`axi4_observers`, new in `abs.py`). Its first form
+    attached at the handle's `run()` and lost the first AW on `demofull` and the
+    crossbar (a B with no write outstanding), so a handle now registers when built.
+  - Teeth: `rules_teeth_ns` 17/17 in both views (the xtor view's checker agrees on the
+    side); `rules_pins_ns` 13/13 (chk_teeth's pin sequences).
+  - fw-hdl: the rv monitor drops `pending` when VALID falls (§8); without it
+    `valid_retract` is invisible to the rules (checked: 12/13).
+  - Lint: the rules are in the xtor lint top, zero findings. Verilator 5.055 limits hit:
+    `w1()` in a typedef used as a class's type parameter fails to link (a localparam
+    instead); `wire`, `release`, `join` are keywords (method names changed).
+
+- Docs still owed from §7: `core-spec.md`, `derived-classes.md`,
+  `writing-a-protocol-package.md` (due "P5, finished P7") and `brief-answers.md` (Q3 is
+  answered in `rules.md`'s gaps; Q1 in design §3.3; Q2 and Q4 are open).
+
+**Next action:** the deadlock analysis (P6 follow-up), or P8 (retire the old package);
+the owed docs above before either if they are wanted first.
 
 Open question raised by the user, not yet decided: move the weavers' SV text into Jinja
 templates (pilot on `xtors.py`; best as an sv-weave `render(template, ctx)` that keeps the
@@ -261,6 +303,7 @@ recommendation. The plan below assumes the recommendation.
 | D8 | Pin-level pre/post | `_pre` on the first `valid` cycle, `_post` on the handshake (design Q6) |
 | D10 | Transaction APIs (after P5) | **Done:** streaming `axi4_burst_if` in the core on the channel payloads; `axi4_xact_if` a convenience shim on top, `read` by beat count (`p5-open-issues.md`) |
 | D11 | Burst API direction (during P6) | **Done:** `axi4_burst_if` (blocking call/return) splits into `axi4_burst_req_if` and `axi4_burst_rsp_if`, carried by a socket and mirror. Responses are calls back, as they complete; no thread per outstanding transaction above the transactors. Blocking forms (`axi4_burst_blocking`, `axi4_xact_if`) are shims on top (design §3.4) |
+| D12 | Rule form in simulation (P7) | **Done:** a rule extends its protocol's rule base (`axi4_rule`: `fw_rule` + both channel listeners; requests at pre from a proxy, at post from pins), not `fw_rule #(type L)` (a rule needs two listener interfaces). `fw_any` is simulated by one instance per value seen (a probe twin discovers values; state copied through registered `fw_count`/`fw_flag`/`fw_value`); `retire()` drops discharged instances. Rules attach to an abstractor by path through the generated `axi4_observers` (`rules.md`) |
 | D9 | Repo | New style built next to the old code in this repo. The old code is deleted in P8, once its suites are ported (design Q7) |
 
 ## 3. Working conventions
@@ -334,6 +377,11 @@ tests/
   formal/       existing + new
 docs/
 ```
+
+House SV style: one class per `.svh`, named after the class, in the package's directory and
+`include`d by the package (`<pkg>.sv` keeps imports, typedefs and free functions). Applied
+to the hand-written new-style packages (`fw_proto/src`, `src/core`, `src/behav`, `tests/ip`)
+on 2026-11-11. Generated packages (`*_woven.sv`) are one file per package.
 
 ## 5. Phases
 
@@ -548,44 +596,44 @@ auto-insertion of `<port>_abs` per role, and the emitter string tables.
 `_abs`, `_abs_h`, and `connect()` on the role ports. Goldens not yet refreshed.*
 
 **P6.4 Reference IPs**, fetched with ivpm (git) into `packages/`:
-- [ ] verilog-axi (`axi_ram`, `axi_crossbar`);
-- [ ] wb2axip (`demofull`).
+- [x] verilog-axi (`axi_ram`, `axi_crossbar`);
+- [x] wb2axip (`demofull`). *Revisions in [reference-ips.md](reference-ips.md).*
 
 PULP waits on brief Q2.
 
 **Tests:**
-- [ ] `tests/ip/axi_ram`: an extern class plus one preset line. The emitted netlist equals a hand-written instantiation (text compare after normalization) and synthesizes in Yosys. It is driven through inserted abstractors from a class test running the `l2_mem_ns` scenarios. Stalls set by path reach the pins (checked by counting idle cycles).
-- [ ] `tests/ip/demofull`: upper-case preset, active-low reset, extra non-AXI pins tied or left open.
-- [ ] `tests/ip/axi_crossbar` (2×2): bit-slice mapping, ID widening, out-of-order across IDs accepted by the manager adapter.
-- [ ] Pin-map preset tests: each preset resolves every field of `P_DEF` and `P_WIDE` against the IP's module header, with no unmapped bit (fw-hdl's checks).
+- [x] `tests/ip/axi_ram`: an extern class plus one preset line. The emitted netlist equals a hand-written instantiation (text compare after normalization) and synthesizes in Yosys. It is driven through inserted abstractors from a class test running the `l2_mem_ns` scenarios. Stalls set by path reach the pins (checked by counting idle cycles).
+- [x] `tests/ip/demofull`: upper-case preset, active-low reset, extra non-AXI pins tied or left open.
+- [x] `tests/ip/axi_crossbar` (2×2): bit-slice mapping, ID widening, out-of-order across IDs accepted by the manager adapter.
+- [x] Pin-map preset tests: each preset resolves every field of `P_DEF` and `P_WIDE` against the IP's module header, with no unmapped bit (fw-hdl's checks). *`tests/ip/presets` (`dfm run ip.presets`): `s_axi_`/`m_axi_` and upper case, on both roles, for both P; the emitted netlists linted against stub headers from an AMBA table (`presets.py`), not from the bundle. A missing pin, an extra pin and a wrong width each fail it (checked by hand).*
 
 **Exit P6:** the three IP tests pass; their netlists match; Yosys synth passes.
 
 ### P7 Rules in simulation (brief A3)
 
 **P7.1 Rule library** (`fw_proto/src`):
-- [ ] `fw_rule #(type L)` extends `L`'s `_base`;
-- [ ] `fw_count`, `fw_flag`, `fw_any #(T)` (simulation: evaluates every value seen, as a set of tracked keys).
-- [ ] Record vocabulary gaps for brief Q3.
+- [x] `fw_rule #(type L)` extends `L`'s `_base`; *as D12: `fw_rule` is the base; the protocol's rule base (`axi4_rule`) implements both channel listeners and maps pre/post to accepted events.*
+- [x] `fw_count`, `fw_flag`, `fw_any #(T)` (simulation: evaluates every value seen, as a set of tracked keys). *Plus `fw_value #(T)` (bounded register; fw-hdl has an `fw_reg`), `fw_rule_node`/`fw_rule_set` (one instance per value seen, several variables, `retire()`), `fw_rv_hold #(T)`.*
+- [x] Record vocabulary gaps for brief Q3. *12 in `rules.md`.*
 
 **P7.2 AXI4 rules** (`src/rules/`): the brief §5 set, each a class on a channel-API listener.
-- [ ] correspondence;
-- [ ] same-ID order (read and write);
-- [ ] R grouping;
-- [ ] W grouping;
-- [ ] B after AW and last W;
-- [ ] burst legality;
-- [ ] outstanding capacity;
-- [ ] exclusive access (escape hatch).
+- [x] correspondence; *`resp_match`*
+- [x] same-ID order (read and write); *read in `r_burst`, write in `b_order` (keyed on ID and index); beyond lengths and ordering only data shows it (`rules.md` gap 5)*
+- [x] R grouping; *`r_burst`*
+- [x] W grouping; *`w_burst` (W ahead of AW allowed)*
+- [x] B after AW and last W; *`b_order`*
+- [x] burst legality; *`burst_legal` (with exclusive legality); plus `w_lanes` (narrow WSTRB)*
+- [x] outstanding capacity; *`capacity`, declared at the attachment (crossbar master ports: `M_ISSUE`+1; the first declaration, `M_ISSUE`, was wrong and the rule caught it under the D11 mutant `blk_rd_done_first`, see rules.md)*
+- [x] exclusive access (escape hatch). *`exclusive`, free form*
 
-**P7.3 Signal-level rules** on `fw_rv_ch` from `_pre`/`_post` (design §4.1).
+**P7.3 Signal-level rules** on `fw_rv_ch` from `_pre`/`_post` (design §4.1). *Done: `fw_rv_hold` per channel in `rv_hold`, pins only. fw-hdl's rv monitor now reports a new first after VALID drops, so a retraction is an event (§8).*
 
-**P7.4 Attachment.** Rules attach by path to proxies (contract), producers (guarantee) and consumers (requirement).
+**P7.4 Attachment.** Rules attach by path to proxies (contract), producers (guarantee) and consumers (requirement). *Done: links and proxies directly (`add_listener`); abstractors by path through the generated `axi4_observers` (each handle registers its proxies when built, a test its listeners; whichever comes second joins them). The role only changes the report in simulation.*
 
 **Tests:**
-- [ ] All rules are attached in every P4-P6 test and pass.
-- [ ] Teeth: port `chk_teeth` to `rules_teeth_ns`. Each rule has a seeded-bug scenario (a misbehaving `_base`-derived model) that must fire, with the report naming the API event (method, ID, beat index).
-- [ ] The same seeded bugs run against `axi4_checker` give agreeing verdicts.
+- [x] All rules are attached in every P4-P6 test and pass. *`xtor_ns` (monitor), `l1_ns`, `l2_ns`, `l2_mem_ns` (link, both views; and the direct path), `axi_ram`, `demofull`, `axi_crossbar` (every abstractor). Presets carry no traffic.*
+- [x] Teeth: port `chk_teeth` to `rules_teeth_ns`. Each rule has a seeded-bug scenario (a misbehaving `_base`-derived model) that must fire, with the report naming the API event (method, ID, beat index). *`rules_teeth_ns`: 13 cases plus 3 event-level `rv_hold` cases, both views; each fires exactly its rule.*
+- [x] The same seeded bugs run against `axi4_checker` give agreeing verdicts. *In `rules_teeth_ns` (xtor view, the link's checker) and `rules_pins_ns` (chk_teeth's 13 pin sequences, monitor + rules + checker): all agree but `valid_in_reset`, which no rule can state.*
 
 **Exit P7:** rules pass on all IPs; every teeth case fires exactly its rule.
 
@@ -665,6 +713,8 @@ Changes made in editable dependencies, for upstreaming. Branch `fw-proto-axi-new
 | fw-hdl | Found at HEAD `6f45fe0`, not caused here: 42 regmap/regblock/mmio/structural_top tests fail (register sources omit the now-required `parent` argument; `dma_channel_regs` has no registers). `test_knobs::test_dfm_resolve` assumes a standalone checkout (`packages/python/bin/dfm`) | to raise |
 | Verilator 5.055 | Bug found: internal fault (endless recursion after V3Class; segfault or OOM) on a class `localparam` from `$bits(type param)` used in nested loop bounds and part-select indices, with the indexed queue filled by an interface-class call. Reduced repro with script and notes: `repro/verilator-class-localparam/`. Worked around in `axi4_to_mem` (a run-time member) | to raise / fix (repro saved) |
 | fw-hdl | `fw_extern` `pin`/`prefix` (from fw-hdl-sv-weave) + bit-slice form | planned (P6) |
+| fw-hdl | rv monitor (`src/std/rv/fw_rv_monitor_xtor_core.sv`): `pending` cleared when VALID drops without a handshake, so the next VALID is a new first and a retraction shows as two pres without a post (needed by P7's `rv_hold`; `rules_pins_ns` `valid_retract` fails without it). `tests/rv_proto` 9/9 (with the `packages -> ..` symlink) | done, uncommitted, branch `fw-proto-axi-new` |
+| Verilator 5.055 | Limit found: a class typedef whose width calls a package function (`logic [w1(P.ID_W)-1:0]`), used as another class's type parameter (`fw_any #(id_t)`), gives an internal error (V3Width "Unlinked"). Worked around with a localparam width in `axi4_rule` | to raise (Verilator) |
 
 ## 9. Later (outlined only)
 

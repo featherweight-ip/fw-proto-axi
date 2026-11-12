@@ -239,6 +239,13 @@ listener base (§4.1), in the restricted form from `abstractors.md` §4a: immedi
 The list is brief §5. They are designed in detail at milestone A3; this doc fixes only
 their attachment point: **the listener interfaces of the channel APIs**.
 
+**Settled in P7** (plan D12, [rules.md](rules.md)): a rule extends the protocol's rule
+base `axi4_rule`, which is `fw_rule` plus both channel listeners. The base turns pre/post
+into accepted events: a request counts at its pre when the events come from a proxy (a
+response may come inside the call) and at its post from a pin monitor. Simulation runs a
+rule with `fw_any` variables as one instance per value seen. Rules attach to links and
+proxies directly, and to an inserted abstractor by path (`axi4_observers`).
+
 ## 4. Derivatives (generated)
 
 Every derived class has the header `#(axi4_param_t P = AXI4_PARAM_DEFAULT)` and is emitted

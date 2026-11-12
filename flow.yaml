@@ -57,7 +57,7 @@ package:
   # lint-waivers-xtor-ns.yaml (it is linted by fw-hdl).
   - name: lint-xtor-ns-top
     uses: std.FileSet
-    needs: [fw.proto.axi.woven-xtor, fw.proto.axi.behav-xtor, suites.test-params]
+    needs: [fw.proto.axi.woven-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, suites.test-params]
     with:
       type: systemVerilogSource
       base: tests/lint
@@ -77,7 +77,8 @@ package:
   - override: tests
     needs: [suites.types, suites.chk-teeth, suites.l1-basic, suites.l2-basic, suites.l2-mem,
             suites.types-ns, suites.weave-ns, suites.bundle-ns, suites.rv-pilot,
-            suites.xtor-ns, suites.l1-ns, suites.l2-ns, suites.l2-mem-ns]
+            suites.xtor-ns, suites.l1-ns, suites.l2-ns, suites.l2-mem-ns,
+            suites.rules-teeth-ns, suites.rules-pins-ns]
 
   # What CI runs on every commit.
   - override: smoke
@@ -86,7 +87,7 @@ package:
   # Reference IPs behind the class API (tests/ip/flow.yaml).
   - root: ip
     desc: Wrapped reference IPs driven through inserted abstractors; netlist compare; Yosys synth
-    needs: [ip.axi-ram, ip.demofull, ip.axi-crossbar]
+    needs: [ip.axi-ram, ip.demofull, ip.axi-crossbar, ip.presets]
 
   # Formal (tests/formal/flow.yaml).
   - root: fv

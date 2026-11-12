@@ -18,11 +18,12 @@ fragment:
   # abstractor glue, the behaviour, and the shared test bench.
   - name: tb-common
     uses: std.FileSet
-    needs: [fw.proto.axi.behav-xtor]
+    needs: [fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor]
     with:
       type: systemVerilogSource
       base: common
       include: [ip_axi_tb_pkg.sv]
+      incdirs: [.]
 
   # The emitted .sv files of a generate pass, as sources (modules first, then
   # <top>_sim.sv, which instantiates them).
@@ -65,6 +66,7 @@ fragment:
       type: systemVerilogSource
       base: axi_ram
       include: [axi_ram_ip_pkg.sv]
+      incdirs: [.]
 
   - name: axi-ram-gen-top
     uses: std.FileSet
@@ -148,6 +150,7 @@ fragment:
       type: systemVerilogSource
       base: demofull
       include: [demofull_ip_pkg.sv]
+      incdirs: [.]
 
   - name: demofull-gen-top
     uses: std.FileSet
@@ -231,6 +234,7 @@ fragment:
       type: systemVerilogSource
       base: axi_crossbar
       include: [axi_crossbar_ip_pkg.sv]
+      incdirs: [.]
 
   - name: axi-crossbar-gen-top
     uses: std.FileSet
@@ -298,3 +302,46 @@ fragment:
 
   - name: axi-crossbar
     needs: [axi-crossbar-run, axi-crossbar-netlist, axi-crossbar-synth]
+
+  # ---- pin-map presets: each naming style on both roles, for P_DEF and
+  # P_WIDE, emitted against stub modules and linted (presets/presets.py).
+  - name: presets-pkg
+    uses: std.FileSet
+    needs: [fw.proto.axi.behav-xtor, suites.test-params]
+    with:
+      type: systemVerilogSource
+      base: presets
+      include: [presets_ip_pkg.sv]
+      incdirs: [.]
+
+  - name: presets-gen-top
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: presets
+      include: [presets_gen.sv]
+
+  - name: presets-gen-img
+    uses: hdlsim.vlt.SimImage
+    needs: [presets-pkg, presets-gen-top]
+    with:
+      top: [presets_gen]
+      args: [--timing]
+
+  - name: presets-gen
+    uses: hdlsim.vlt.SimRun
+    needs: [presets-gen-img]
+
+  - name: presets-emitted
+    uses: emitted
+    needs: [presets-gen]
+
+  - name: presets
+    shell: pytask
+    needs: [presets-emitted]
+    consumes: all
+    passthrough: none
+    run: |
+      import sys, os; sys.path.insert(0, os.path.join(input.srcdir, "presets"))
+      import presets
+      return presets.check(input)

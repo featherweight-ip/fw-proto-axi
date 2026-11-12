@@ -91,7 +91,7 @@ emitter connects the fields the struct port has; the rest are left off.
 
 Two passes per IP (`<ip>-gen`, `<ip>-run`), plus `<ip>-netlist` (emitted netlist against
 a hand-written one) and `<ip>-synth` (Yosys). The class side uses the shared bench
-`common/ip_axi_tb_pkg.sv`: a manager on an `axi4_mgr_socket` (manager adapter, blocking
+`common/ip_axi_tb_pkg.sv` (`ip_axi_tb.svh`): a manager on an `axi4_mgr_socket` (manager adapter, blocking
 shim, reference memory) and, for manager ports leaving the module tree, a memory component
 on an `axi4_sub_socket`.
 

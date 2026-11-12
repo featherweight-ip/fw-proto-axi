@@ -70,6 +70,17 @@ module axi4_l1_ns_link
         sb.m_req = sub_end;
     endfunction
 
+    // The listeners' events come from the pin monitor (rules count a request at
+    // its handshake).
+    function bit at_pins(); return 1; endfunction
+    // Segment A's checker (where the monitor is): failures counted on the manager
+    // side and the subordinate side, since reset.
+    function void chk_counts(output int unsigned m, output int unsigned s);
+        m = u_a.u_chk.n_err_m;
+        s = u_a.u_chk.n_err_s;
+    endfunction
+    function bit has_checker(); return 1; endfunction
+
     function void add_req_listener(axi4_req_if_listener #(P) l); monb.req.add_listener(l); endfunction
     function void add_rsp_listener(axi4_rsp_if_listener #(P) l); monb.rsp.add_listener(l); endfunction
 

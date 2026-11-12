@@ -3,6 +3,7 @@
 module demofull_tb;
     import fw_proto_pkg::*;
     import demofull_ip_pkg::*;
+    import ip_axi_tb_pkg::*;
     import demo_top_shells_pkg::*;
 
     logic clock = 1'b0;
@@ -15,6 +16,10 @@ module demofull_tb;
     // the IP's own pin: reset must reach it inverted.
     int unsigned rst_low = 0;
     always @(posedge clock) if (reset && !u_sim.u_dut_core.slv.S_AXI_ARESETN) rst_low++;
+
+    // The AXI4 rules on the abstractor, by its path (no capacity declared).
+    ip_axi_rules #(P) rules = new;
+    initial rules.at("dut.s_abs");
 
     initial begin
         automatic int errors = 0;
@@ -38,6 +43,7 @@ module demofull_tb;
         // Polled: Verilator evaluates a wait() expression eagerly.
         while (!u_sim.u_root.root.tb.done) @(posedge clock);
         errors += u_sim.u_root.root.tb.n_errors;
+        errors += rules.check("demofull");
         $display("[demofull] checks=%0d errors=%0d", u_sim.u_root.root.tb.n_checks, errors);
         if (errors == 0) $display("[demofull] PASS");
         else             $fatal(1, "[demofull] FAIL (%0d errors)", errors);

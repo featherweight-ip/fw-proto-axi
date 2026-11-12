@@ -26,6 +26,11 @@ module axi4_l1_ns_link
         req_px.m_target = sub_end;
     endfunction
     function bit set_knob(string path, int unsigned v); return 0; endfunction
+    // The listeners' events come from proxies (rules count a request at its pre).
+    function bit at_pins(); return 0; endfunction
+    // Segment A's checker counts (manager side, subordinate side): no checker here.
+    function void chk_counts(output int unsigned m, output int unsigned s); m = 0; s = 0; endfunction
+    function bit has_checker(); return 0; endfunction
     function string errors(); return ""; endfunction
     task settle(); endtask
 endmodule

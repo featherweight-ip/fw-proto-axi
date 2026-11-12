@@ -12,7 +12,8 @@
 // request with its ID, EXOKAY only for exclusive), so the xtor view's checkers
 // stay at zero violations. Each test task returns "" or the first failure.
 module axi4_l1_ns_cell
-    import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*;
+    import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*,
+           fw_proto_axi4_rules_pkg::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) ();
     typedef axi4_types #(P)::aw_t aw_t;
     typedef axi4_types #(P)::w_t  w_t;
@@ -47,6 +48,7 @@ module axi4_l1_ns_cell
 
     req_rec rq = new;
     rsp_rec rs = new;
+    axi4_rules #(P) rules;       // the AXI4 rules (plan P7), on the same events
     int unsigned n_sent[5];      // beats sent per channel since the last finish()
     bit ready;                   // the link is up and observed: tests may start
 
@@ -54,6 +56,9 @@ module axi4_l1_ns_cell
         wait (u_link.up);
         u_link.add_req_listener(rq);
         u_link.add_rsp_listener(rs);
+        rules = new("link", u_link.at_pins());
+        u_link.add_req_listener(rules.req);
+        u_link.add_rsp_listener(rules.rsp);
         ready = 1;
     end
 
@@ -263,8 +268,8 @@ module axi4_l1_ns_cell
     endtask
 
     // Every test ends here: the link quiet, nothing undelivered, the
-    // observer saw each beat sent (one pre and one post each), no checker
-    // findings. Then the counts reset for the next test.
+    // observer saw each beat sent (one pre and one post each), no rule or
+    // checker findings. Then the counts and the rules reset for the next test.
     task automatic finish(output string err);
         string ch[5] = '{"aw", "w", "b", "ar", "r"};
         u_link.settle();
@@ -276,6 +281,9 @@ module axi4_l1_ns_cell
             if (pre != n_sent[c] || post != n_sent[c])
                 fail($sformatf("%s: sent %0d, observed pre %0d post %0d", ch[c], n_sent[c], pre, post));
         end
+        if (rules.n_fail() != 0)
+            fail($sformatf("rules failed: %s (first: %s)", rules.failed(), rules.first()));
+        rules.reset();
         fail(u_link.errors());
         err = (m_err == "") ? "" : $sformatf("P(ID_W=%0d DATA_W=%0d) %s", P.ID_W, DW_, m_err);
         m_err = "";

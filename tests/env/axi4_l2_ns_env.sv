@@ -14,16 +14,23 @@
 //   mgr, sub        the adapters; sub.max_delay reorders responses across IDs
 //   serve(t)        what sub calls: tgt_b (the plain test target tgt behind the shim),
 //                   mem (the memory model) or btgt (a burst target with random
-//                   per-beat responses and USER)
+//                   per-beat responses and USER); tgt.max_delay slows each call
 //   m32, m128       fw_mem_if over xact, 32- and 128-bit accesses
 //   rq, rs          every beat on the link (pin monitor in xtor, proxies in tlm)
+//   blk_d, mgr_d,   the direct path, no link: blk_d -> mgr_d -> isub, a stub that
+//   isub, sink      answers inside the call; sink takes mgr_d's responses when a
+//                   test calls mgr_d itself
+//   check_bursts()  random bursts through a blocking shim, checked against a log
+//   rules, rules_d  the AXI4 rules (plan P7) on the link (its pin monitor in xtor,
+//                   its proxies in tlm) and on the direct path (proxies around isub)
 //   u_link          the link: set_knob(), settle(), errors()
 module axi4_l2_ns_env
     import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*,
-           fw_proto_axi4_behav_pkg::*, axi4_l2_ns_pkg::*;
+           fw_proto_axi4_behav_pkg::*, fw_proto_axi4_rules_pkg::*, axi4_l2_ns_pkg::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) ();
     typedef axi4_l2_xact #(P)       xact_t;
     typedef axi4_payloads #(P)      pl;
+    typedef axi4_attr #(P)          at;
     typedef axi4_types #(P)::aw_t   aw_t;
     typedef axi4_types #(P)::w_t    w_t;
     typedef axi4_types #(P)::b_t    b_t;
@@ -37,11 +44,14 @@ module axi4_l2_ns_env
 
     axi4_l1_ns_link #(P) u_link ();
 
-    // ---- a trivial target: logs what it serves, answers reads with data_of(),
-    // everything with `resp` (or err_resp inside [err_lo, err_hi]).
+    // ---- a trivial target: logs what it serves (on arrival), answers reads
+    // with data_of(), everything with `resp` (or err_resp inside [err_lo,
+    // err_hi]); with max_delay != 0 each call first takes a random 0..max_delay,
+    // so calls finish out of order.
     class test_target extends axi4_xact_if_base #(P);
-        xact_t      seen[$];
-        axi4_resp_e resp = AXI4_RESP_OKAY;
+        xact_t       seen[$];
+        axi4_resp_e  resp = AXI4_RESP_OKAY;
+        int unsigned max_delay;
         addr_t      err_lo = '1, err_hi = '0;
         axi4_resp_e err_resp = AXI4_RESP_SLVERR;
 
@@ -62,8 +72,9 @@ module axi4_l2_ns_env
             x.write = 1; x.addr = addr; x.attr = attr; x.data = data; x.strb = strb;
             x.len = 8'(data.size() - 1);
             x.resp = resp_of(addr);
-            resp = x.resp;
             seen.push_back(x);
+            if (max_delay != 0) #($urandom_range(max_delay));
+            resp = x.resp;
         endtask
 
         virtual task read(input addr_t addr, input int unsigned beats, input attr_t attr,
@@ -72,9 +83,10 @@ module axi4_l2_ns_env
             x.write = 0; x.addr = addr; x.attr = attr; x.len = 8'(beats - 1);
             x.resp = resp_of(addr);
             for (int unsigned n = 0; n < beats; n++) x.data.push_back(data_of(addr, n));
+            seen.push_back(x);
+            if (max_delay != 0) #($urandom_range(max_delay));
             data = x.data;
             resp = x.resp;
-            seen.push_back(x);
         endtask
     endclass
 
@@ -88,11 +100,14 @@ module axi4_l2_ns_env
         ar_t ar; r_t r[$];
     endclass
 
-    class burst_target extends axi4_burst_req_if_base #(P);
-        burst_seen             seen[$];
-        axi4_burst_rsp_if #(P) rsp;
+    // Every burst a target served, in arrival order.
+    class burst_log;
+        burst_seen seen[$];
+    endclass
 
-        static function axi4_resp_e rand_resp();
+    // Random beats, ID as the request's (the burst API requires it).
+    class burst_rnd;
+        static function axi4_resp_e resp();
             case ($urandom_range(2, 0))
                 0: return AXI4_RESP_OKAY;
                 1: return AXI4_RESP_SLVERR;
@@ -100,14 +115,25 @@ module axi4_l2_ns_env
             endcase
         endfunction
 
+        static function logic [1023:0] bits();
+            logic [1023:0] v;
+            for (int i = 0; i < 32; i++) v[i*32 +: 32] = $urandom;
+            return v;
+        endfunction
+    endclass
+
+    class burst_target extends axi4_burst_req_if_base #(P);
+        burst_log              log = new;
+        axi4_burst_rsp_if #(P) rsp;
+
         virtual task write_burst(input aw_t aw, input w_t w[$]);
             burst_seen s = new;
-            b_t        b = b_t'({$urandom, $urandom});
+            b_t        b = b_t'(burst_rnd::bits());
             s.write = 1; s.aw = aw; s.w = w;
             b.id = aw.id;
-            b.resp = rand_resp();
+            b.resp = burst_rnd::resp();
             s.b = b;
-            seen.push_back(s);
+            log.seen.push_back(s);
             rsp.write_resp(b);
         endtask
 
@@ -115,17 +141,90 @@ module axi4_l2_ns_env
             burst_seen s = new;
             s.write = 0; s.ar = ar;
             for (int unsigned n = 0; n < axi4_burst_beats(ar.len); n++) begin
-                logic [1023:0] v;
-                r_t f;
-                for (int i = 0; i < 32; i++) v[i*32 +: 32] = $urandom;
-                f = r_t'(v);
+                r_t f = r_t'(burst_rnd::bits());
                 f.id = ar.id;
-                f.resp = rand_resp();
+                f.resp = burst_rnd::resp();
                 s.r.push_back(f);
             end
-            seen.push_back(s);
+            log.seen.push_back(s);
             foreach (s.r[n]) rsp.read_resp(s.r[n]);
         endtask
+    endclass
+
+    // ---- the direct path, no link: blk_d -> mgr_d -> isub. isub stands in for
+    // the link and the subordinate end and answers inside the call: B within
+    // the last W beat's call, every R beat within the AR's call (random beats,
+    // as the link carries them). With beat_delay != 0 each beat first takes
+    // that long, so concurrent callers' beats can overlap. W follows AW order.
+    class inline_sub extends axi4_req_if_base #(P);
+        axi4_rsp_if #(P) rsp;
+        int unsigned     beat_delay;
+        int unsigned     n_errors;
+        burst_log        log = new;
+        local burst_seen m_open[$];   // writes short of W beats
+
+        virtual task aw(input aw_t t);
+            burst_seen s = new;
+            if (beat_delay != 0) #(beat_delay);
+            s.write = 1; s.aw = t;
+            log.seen.push_back(s);
+            m_open.push_back(s);
+        endtask
+
+        virtual task w(input w_t t);
+            burst_seen s;
+            if (beat_delay != 0) #(beat_delay);
+            if (m_open.size() == 0) begin
+                n_errors++;
+                $display("%0t inline_sub: ERROR W beat with no AW open", $time);
+                return;
+            end
+            s = m_open[0];
+            s.w.push_back(t);
+            if (!t.last) return;
+            void'(m_open.pop_front());
+            s.b = b_t'(burst_rnd::bits());
+            s.b.id = s.aw.id;
+            s.b.resp = burst_rnd::resp();
+            s.b = pl::b_mask(s.b);
+            rsp.b(s.b);
+        endtask
+
+        virtual task ar(input ar_t t);
+            burst_seen   s = new;
+            int unsigned n = axi4_burst_beats(t.len);
+            if (beat_delay != 0) #(beat_delay);
+            s.write = 0; s.ar = t;
+            log.seen.push_back(s);
+            for (int unsigned i = 0; i < n; i++) begin
+                r_t f = r_t'(burst_rnd::bits());
+                f.id = t.id;
+                f.resp = burst_rnd::resp();
+                f.last = (i == n - 1);
+                f = pl::r_mask(f);
+                s.r.push_back(f);
+                rsp.r(f);
+            end
+        endtask
+
+        function bit idle();
+            return m_open.size() == 0;
+        endfunction
+
+        function void clear();
+            log.seen.delete();
+            m_open.delete();
+            beat_delay = 0;
+            n_errors = 0;
+        endfunction
+    endclass
+
+    // What mgr_d passes up when the test calls it directly (no blocking shim).
+    class rsp_sink extends axi4_burst_rsp_if_base #(P);
+        b_t b[$];
+        r_t r[$];
+        virtual task write_resp(input b_t t); b.push_back(t); endtask
+        virtual task read_resp(input r_t t); r.push_back(t); endtask
     endclass
 
     // ---- observers
@@ -217,6 +316,13 @@ module axi4_l2_ns_env
     test_target                  tgt = new;
     axi4_burst_on_xact #(P)      tgt_b = new(tgt);
     burst_target                 btgt = new;
+    inline_sub                   isub = new;
+    axi4_mgr_adapter #(P)        mgr_d;
+    axi4_burst_blocking #(P)     blk_d;
+    rsp_sink                     sink = new;
+    axi4_req_if_proxy #(P)       isub_px = new(isub);
+    axi4_rsp_if_proxy #(P)       mgr_d_px;
+    axi4_rules #(P)              rules, rules_d;
     axi4_mem_model #(P)          mem = new;
     burst_rec                    brec = new;
     burst_req_rec                brq = new(brec);
@@ -249,6 +355,17 @@ module axi4_l2_ns_env
         m128 = new(xact);
         u_link.add_req_listener(rq);
         u_link.add_rsp_listener(rs);
+        mgr_d = new(isub_px);
+        blk_d = new(mgr_d);
+        mgr_d.up = blk_d;
+        mgr_d_px = new(mgr_d);
+        isub.rsp = mgr_d_px;
+        rules = new("link", u_link.at_pins());
+        u_link.add_req_listener(rules.req);
+        u_link.add_rsp_listener(rules.rsp);
+        rules_d = new("direct");
+        isub_px.add_listener(rules_d.req);
+        mgr_d_px.add_listener(rules_d.rsp);
         ready = 1;
     end
 
@@ -261,9 +378,10 @@ module axi4_l2_ns_env
         wait (ready);
         forever begin
             #(STALL);
-            if ((brec.n_open != 0 || blk.n_waiting != 0) && $time - brec.t_last >= STALL)
+            if ((brec.n_open != 0 || blk.n_waiting != 0 || blk_d.n_waiting != 0) &&
+                $time - brec.t_last >= STALL)
                 $fatal(1, "axi4_l2_ns_env (ID_W=%0d DATA_W=%0d): %0d transactions open, %0d callers waiting, since %0t (mgr errors %0d, sub errors %0d, blk errors %0d)",
-                       P.ID_W, P.DATA_W, brec.n_open, blk.n_waiting, brec.t_last, mgr.n_errors,
+                       P.ID_W, P.DATA_W, brec.n_open, blk.n_waiting + blk_d.n_waiting, brec.t_last, mgr.n_errors,
                        sub.n_errors, blk.n_errors);
         end
     end
@@ -365,10 +483,78 @@ module axi4_l2_ns_env
         return "";
     endfunction
 
+    // `count` random bursts through blk (axi4_burst_blocking) to a burst target that
+    // logs in `log`: the target sees each request as the link carries it (absent
+    // fields zeroed), and the caller gets the target's B and R beats, ID set to
+    // the request's and RLAST to the beat count. err: "" or the first failure.
+    string m_chk;
+    function void chk_fail(string msg);
+        if (m_chk == "") m_chk = msg;
+    endfunction
+
+    task automatic check_bursts(axi4_burst_blocking #(P) blk, burst_log log, int unsigned count,
+                                output string err);
+        int unsigned base = log.seen.size();
+        m_chk = "";
+        for (int unsigned i = 0; i < count; i++) begin
+            xact_t x = rand_req(i % 2);
+            string d;
+            if (x.write) begin
+                aw_t aw = at::to_aw(x.addr, x.n_beats(), x.attr);
+                w_t  w[$];
+                b_t  b, e;
+                foreach (x.data[n]) begin
+                    w_t f = w_t'(rnd());
+                    f.data = x.data[n];
+                    f.strb = x.strb[n];
+                    f.last = (n == x.data.size() - 1);
+                    w.push_back(f);
+                end
+                blk.write(aw, w, b);
+                if (log.seen.size() != base + i + 1 || !log.seen[base + i].write) begin
+                    chk_fail($sformatf("burst %0d: not seen by the target", i));
+                    break;
+                end
+                if (!pl::aw_compare(log.seen[base + i].aw, pl::aw_mask(aw), d) || log.seen[base + i].aw !== pl::aw_mask(aw))
+                    chk_fail($sformatf("burst %0d AW:%s", i, d));
+                if (log.seen[base + i].w.size() != w.size()) chk_fail($sformatf("burst %0d: W beat count", i));
+                else foreach (w[n])
+                    if (log.seen[base + i].w[n] !== pl::w_mask(w[n]))
+                        chk_fail($sformatf("burst %0d W beat %0d: %s, sent %s", i, n,
+                                       pl::w_sprint(log.seen[base + i].w[n]), pl::w_sprint(w[n])));
+                e = log.seen[base + i].b;
+                e.id = pl::aw_mask(aw).id;
+                e = pl::b_mask(e);
+                if (b !== e) chk_fail($sformatf("burst %0d B: %s, target gave %s", i, pl::b_sprint(b), pl::b_sprint(e)));
+            end else begin
+                ar_t ar = at::to_ar(x.addr, x.n_beats(), x.attr);
+                r_t  r[$];
+                blk.read(ar, r);
+                if (log.seen.size() != base + i + 1 || log.seen[base + i].write) begin
+                    chk_fail($sformatf("burst %0d: not seen by the target", i));
+                    break;
+                end
+                if (log.seen[base + i].ar !== pl::ar_mask(ar)) chk_fail($sformatf("burst %0d AR", i));
+                if (r.size() != x.n_beats()) chk_fail($sformatf("burst %0d: %0d R beats", i, r.size()));
+                else foreach (r[n]) begin
+                    r_t e = log.seen[base + i].r[n];
+                    e.id = pl::ar_mask(ar).id;
+                    e.last = (n == r.size() - 1);
+                    e = pl::r_mask(e);
+                    if (r[n] !== e)
+                        chk_fail($sformatf("burst %0d R beat %0d: %s, target gave %s", i, n,
+                                       pl::r_sprint(r[n]), pl::r_sprint(e)));
+                end
+            end
+        end
+        err = m_chk;
+    endtask
+
     // ---- life cycle
 
     function int unsigned n_errors();
-        return mgr.n_errors + sub.n_errors + blk.n_errors;
+        return mgr.n_errors + sub.n_errors + blk.n_errors + mgr_d.n_errors + blk_d.n_errors +
+               isub.n_errors;
     endfunction
 
     // "" when the env is quiet and clean, else what is not.
@@ -376,11 +562,23 @@ module axi4_l2_ns_env
         u_link.settle();
         err = "";
         if (!mgr.idle() || !sub.idle()) err = "adapters not idle";
+        else if (!mgr_d.idle() || !isub.idle() || blk_d.n_waiting != 0) err = "direct path not idle";
         else if (n_errors() != 0) err = $sformatf("%0d adapter errors", n_errors());
+        else if (rules.n_fail() + rules_d.n_fail() != 0)
+            err = $sformatf("rules failed: %s%s (first: %s%s)", rules.failed(), rules_d.failed(),
+                            rules.first(), rules_d.first());
         else err = u_link.errors();
+        rules.reset();
+        rules_d.reset();
         mgr.n_errors = 0;
         sub.n_errors = 0;
         blk.n_errors = 0;
+        mgr_d.n_errors = 0;
+        blk_d.n_errors = 0;
+        mgr_d.up = blk_d;
+        isub.clear();
+        sink.b.delete();
+        sink.r.delete();
         sub.max_delay = 0;
         sub.r_interleave = 0;
         tgt.seen.delete();
@@ -388,7 +586,8 @@ module axi4_l2_ns_env
         tgt.err_lo = '1;
         tgt.err_hi = '0;
         tgt.err_resp = AXI4_RESP_SLVERR;
-        btgt.seen.delete();
+        tgt.max_delay = 0;
+        btgt.log.seen.delete();
         mem.clear();
         xrec.clear();
         rq.clear();

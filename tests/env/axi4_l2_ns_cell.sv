@@ -12,6 +12,7 @@ module axi4_l2_ns_cell
     typedef axi4_types #(P)::b_t    b_t;
     typedef axi4_types #(P)::r_t    r_t;
     typedef axi4_types #(P)::data_t data_t;
+    typedef axi4_types #(P)::addr_t addr_t;
     typedef axi4_attr #(P)          at;
     typedef axi4_payloads #(P)      pl;
 
@@ -118,6 +119,13 @@ module axi4_l2_ns_cell
         start();
         env.sub.max_delay = 80;
         env.sub.r_interleave = 1;   // reordered and interleaved across IDs
+        // The target takes a random time per call, so calls of one ID finish
+        // out of order and the shim must answer them in order. The upper half
+        // of the address space answers SLVERR, so a B given to the wrong caller
+        // shows.
+        env.tgt.max_delay = 300;
+        env.tgt.err_lo = addr_t'(1) << ($bits(addr_t) - 1);
+        env.tgt.err_hi = '1;
         for (int unsigned i = 0; i < N; i++) begin
             xact_t x = env.rand_req($urandom_range(1, 0));
             x.attr.id = '0;
@@ -151,7 +159,12 @@ module axi4_l2_ns_cell
                     if (df != "") fail($sformatf("dir %0d id %0d #%0d out of order: %s", d, id, i, df));
                 end
             end
-        foreach (xs[i]) if (!xs[i].write) check_rd(xs[i], AXI4_RESP_OKAY, $sformatf("xact %0d", i));
+        foreach (xs[i]) begin
+            axi4_resp_e e = (xs[i].addr >= env.tgt.err_lo) ? AXI4_RESP_SLVERR : AXI4_RESP_OKAY;
+            if (!xs[i].write) check_rd(xs[i], e, $sformatf("xact %0d", i));
+            else if (xs[i].resp !== e)
+                fail($sformatf("xact %0d: B %s, expected %s", i, xs[i].resp.name(), e.name()));
+        end
         finish(err);
     endtask
 
@@ -276,58 +289,70 @@ module axi4_l2_ns_cell
     // USER) come back exactly, with RLAST on the last beat whatever the target put
     // there.
     task automatic t_burst_fidelity(output string err);
+        string e;
         start();
         env.serve(env.btgt);
-        for (int unsigned i = 0; i < N; i++) begin
-            xact_t x = env.rand_req(i % 2);
-            string d;
-            if (x.write) begin
-                aw_t aw = at::to_aw(x.addr, x.n_beats(), x.attr);
-                w_t  w[$];
-                b_t  b, e;
-                foreach (x.data[n]) begin
-                    w_t f = w_t'(env.rnd());
-                    f.data = x.data[n];
-                    f.strb = x.strb[n];
-                    f.last = (n == x.data.size() - 1);
-                    w.push_back(f);
+        env.check_bursts(env.blk, env.btgt.log, N, e);
+        fail(e);
+        finish(err);
+    endtask
+
+    // Responses inside the request call: the blocking shim and the manager
+    // adapter straight onto env.isub, which answers B within the last W beat's
+    // call and every R beat within the AR's call. Same checks as burst_fidelity.
+    task automatic t_inline_responses(output string err);
+        string e;
+        start();
+        env.check_bursts(env.blk_d, env.isub.log, N, e);
+        fail(e);
+        finish(err);
+    endtask
+
+    // Concurrent writers on the manager adapter (no blocking shim, which
+    // serializes): each W beat takes a time unit at env.isub, so the callers
+    // overlap; every burst must arrive with its own W beats, each B go up once.
+    task automatic t_concurrent_writers(output string err);
+        localparam int unsigned NW = 4, PER = 4;
+        aw_t sent_aw[$];
+        w_t  sent_w[$][$];
+        start();
+        env.mgr_d.up = env.sink;
+        env.isub.beat_delay = 1;
+        for (int unsigned k = 0; k < NW; k++) begin
+            fork
+                for (int unsigned j = 0; j < PER; j++) begin
+                    xact_t x = env.rand_req(1);
+                    aw_t   aw = at::to_aw(x.addr, x.n_beats(), x.attr);
+                    w_t    w[$];
+                    foreach (x.data[n]) begin
+                        w_t f = '0;
+                        f.data = x.data[n];
+                        f.strb = x.strb[n];
+                        f.last = (n == x.data.size() - 1);
+                        w.push_back(pl::w_mask(f));
+                    end
+                    aw = pl::aw_mask(aw);
+                    sent_aw.push_back(aw);
+                    sent_w.push_back(w);
+                    env.mgr_d.write_burst(aw, w);
                 end
-                env.blk.write(aw, w, b);
-                if (env.btgt.seen.size() != i + 1 || !env.btgt.seen[i].write) begin
-                    fail($sformatf("burst %0d: not seen by the target", i));
-                    break;
-                end
-                if (!pl::aw_compare(env.btgt.seen[i].aw, pl::aw_mask(aw), d) || env.btgt.seen[i].aw !== pl::aw_mask(aw))
-                    fail($sformatf("burst %0d AW:%s", i, d));
-                if (env.btgt.seen[i].w.size() != w.size()) fail($sformatf("burst %0d: W beat count", i));
-                else foreach (w[n])
-                    if (env.btgt.seen[i].w[n] !== pl::w_mask(w[n]))
-                        fail($sformatf("burst %0d W beat %0d: %s, sent %s", i, n,
-                                       pl::w_sprint(env.btgt.seen[i].w[n]), pl::w_sprint(w[n])));
-                e = env.btgt.seen[i].b;
-                e.id = pl::aw_mask(aw).id;
-                e = pl::b_mask(e);
-                if (b !== e) fail($sformatf("burst %0d B: %s, target gave %s", i, pl::b_sprint(b), pl::b_sprint(e)));
-            end else begin
-                ar_t ar = at::to_ar(x.addr, x.n_beats(), x.attr);
-                r_t  r[$];
-                env.blk.read(ar, r);
-                if (env.btgt.seen.size() != i + 1 || env.btgt.seen[i].write) begin
-                    fail($sformatf("burst %0d: not seen by the target", i));
-                    break;
-                end
-                if (env.btgt.seen[i].ar !== pl::ar_mask(ar)) fail($sformatf("burst %0d AR", i));
-                if (r.size() != x.n_beats()) fail($sformatf("burst %0d: %0d R beats", i, r.size()));
-                else foreach (r[n]) begin
-                    r_t e = env.btgt.seen[i].r[n];
-                    e.id = pl::ar_mask(ar).id;
-                    e.last = (n == r.size() - 1);
-                    e = pl::r_mask(e);
-                    if (r[n] !== e)
-                        fail($sformatf("burst %0d R beat %0d: %s, target gave %s", i, n,
-                                       pl::r_sprint(r[n]), pl::r_sprint(e)));
-                end
-            end
+            join_none
+        end
+        wait fork;
+        if (env.sink.b.size() != NW * PER)
+            fail($sformatf("%0d B up, of %0d writes", env.sink.b.size(), NW * PER));
+        if (env.isub.log.seen.size() != NW * PER)
+            fail($sformatf("%0d writes arrived, of %0d", env.isub.log.seen.size(), NW * PER));
+        foreach (env.isub.log.seen[s]) begin
+            int found = -1;
+            foreach (sent_aw[q]) if (sent_aw[q] === env.isub.log.seen[s].aw) found = q;
+            if (found < 0) fail($sformatf("write %0d: AW not sent", s));
+            else if (env.isub.log.seen[s].w.size() != sent_w[found].size())
+                fail($sformatf("write %0d: %0d W beats, sent %0d", s,
+                               env.isub.log.seen[s].w.size(), sent_w[found].size()));
+            else foreach (sent_w[found][n])
+                if (env.isub.log.seen[s].w[n] !== sent_w[found][n])
+                    fail($sformatf("write %0d W beat %0d: not the beat sent", s, n));
         end
         finish(err);
     endtask

@@ -42,6 +42,8 @@ module l2_ns_unit_test;
     `NS_TEST(link_beats)
     `NS_TEST(xact_listener)
     `NS_TEST(burst_fidelity)
+    `NS_TEST(inline_responses)
+    `NS_TEST(concurrent_writers)
     `SVUNIT_TESTS_END
     `undef NS_TEST
 endmodule

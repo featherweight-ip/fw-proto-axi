@@ -86,6 +86,45 @@ fragment:
     tags:
     - std.Test: {name: chk_teeth}
 
+  # ---- suite: rules_pins_ns (plan P7): chk_teeth's pin sequences watched by the
+  # checker and by the pin monitor with the AXI4 rules; the verdicts must agree.
+  - name: rules-pins-ns-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [rules_pins_ns_unit_test.sv]
+
+  - name: rules-pins-ns-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [rules-pins-ns-tests]
+
+  - name: rules-pins-ns-bench
+    passthrough: all
+    needs: [fw.proto.axi.types, fw.proto.axi.checker, fw.proto.axi.rules-xtor, rules-pins-ns-runner]
+
+  - name: rules-pins-ns-img
+    uses: hdlsim.SimImage
+    needs: [svunit, rules-pins-ns-bench, flags-img]
+    with:
+      sim: "${{ sim }}"
+      top: [testrunner]
+
+  - name: rules-pins-ns-run
+    uses: hdlsim.SimRun
+    needs: [rules-pins-ns-img, "flags-run-${{ build }}"]
+    with:
+      sim: "${{ sim }}"
+      mode: test
+
+  - name: rules-pins-ns
+    uses: hdltest.svunit.Check
+    needs: [rules-pins-ns-run]
+    with:
+      name: rules_pins_ns
+    tags:
+    - std.Test: {name: rules_pins_ns}
+
   # ---- suite: weave_ns (new style: the classes fw_proto derives from the
   # AXI4 core and from a synthetic API, over P_MIN/P_DEF/P_WIDE; no harness)
   - name: weave-synth-src
@@ -330,8 +369,8 @@ fragment:
 
   - name: xtor-ns-bench
     passthrough: all
-    needs: [fw.proto.axi.woven-xtor, fw.proto.axi.checker, test-params, xtor-ns-env,
-            xtor-ns-runner]
+    needs: [fw.proto.axi.woven-xtor, fw.proto.axi.rules-xtor, fw.proto.axi.checker, test-params,
+            xtor-ns-env, xtor-ns-runner]
 
   - name: xtor-ns-img
     uses: hdlsim.SimImage
@@ -394,11 +433,11 @@ fragment:
 
   - name: l1-ns-bench-tlm
     passthrough: all
-    needs: [l1-ns-link-tlm, test-params, l1-ns-cell, l1-ns-runner]
+    needs: [l1-ns-link-tlm, fw.proto.axi.rules, test-params, l1-ns-cell, l1-ns-runner]
 
   - name: l1-ns-bench-xtor
     passthrough: all
-    needs: [l1-ns-link-xtor, test-params, l1-ns-cell, l1-ns-runner]
+    needs: [l1-ns-link-xtor, fw.proto.axi.rules-xtor, test-params, l1-ns-cell, l1-ns-runner]
 
   - name: l1-ns-img
     strategy:
@@ -459,11 +498,11 @@ fragment:
 
   - name: l2-ns-bench-tlm
     passthrough: all
-    needs: [l1-ns-link-tlm, fw.proto.axi.behav, test-params, l2-ns-cell, l2-ns-runner]
+    needs: [l1-ns-link-tlm, fw.proto.axi.behav, fw.proto.axi.rules, test-params, l2-ns-cell, l2-ns-runner]
 
   - name: l2-ns-bench-xtor
     passthrough: all
-    needs: [l1-ns-link-xtor, fw.proto.axi.behav-xtor, test-params, l2-ns-cell, l2-ns-runner]
+    needs: [l1-ns-link-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, test-params, l2-ns-cell, l2-ns-runner]
 
   - name: l2-ns-img
     strategy:
@@ -524,11 +563,11 @@ fragment:
 
   - name: l2-mem-ns-bench-tlm
     passthrough: all
-    needs: [l1-ns-link-tlm, fw.proto.axi.behav, test-params, l2-mem-ns-cell, l2-mem-ns-runner]
+    needs: [l1-ns-link-tlm, fw.proto.axi.behav, fw.proto.axi.rules, test-params, l2-mem-ns-cell, l2-mem-ns-runner]
 
   - name: l2-mem-ns-bench-xtor
     passthrough: all
-    needs: [l1-ns-link-xtor, fw.proto.axi.behav-xtor, test-params, l2-mem-ns-cell, l2-mem-ns-runner]
+    needs: [l1-ns-link-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, test-params, l2-mem-ns-cell, l2-mem-ns-runner]
 
   - name: l2-mem-ns-img
     strategy:
@@ -566,6 +605,72 @@ fragment:
         needs: ["l2-mem-ns-run.${{ this.image }}"]
         with:
           name: "l2_mem_ns-${{ this.image }}"
+
+  # ---- suite: rules_teeth_ns (plan P7, the port of chk_teeth): one planted bug
+  # per case over the L1 link, from a misbehaving model or the manager; exactly
+  # its rule must fire, and with pins the link's axi4_checker must agree.
+  - name: rules-teeth-ns-cell
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: env
+      include: [axi4_rules_teeth_cell.sv]
+
+  - name: rules-teeth-ns-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [rules_teeth_ns_unit_test.sv]
+
+  - name: rules-teeth-ns-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [rules-teeth-ns-tests]
+
+  - name: rules-teeth-ns-bench-tlm
+    passthrough: all
+    needs: [l1-ns-link-tlm, fw.proto.axi.rules, test-params, rules-teeth-ns-cell, rules-teeth-ns-runner]
+
+  - name: rules-teeth-ns-bench-xtor
+    passthrough: all
+    needs: [l1-ns-link-xtor, fw.proto.axi.rules-xtor, test-params, rules-teeth-ns-cell, rules-teeth-ns-runner]
+
+  - name: rules-teeth-ns-img
+    strategy:
+      select:
+        axes:
+          view: [tlm, xtor]
+      body:
+      - uses: hdlsim.SimImage
+        needs: [svunit, "rules-teeth-ns-bench-${{ this.view }}", flags-img]
+        with:
+          sim: "${{ sim }}"
+          top: [testrunner]
+
+  - name: rules-teeth-ns-run
+    strategy:
+      select:
+        axes:
+          view: [tlm, xtor]
+      body:
+      - uses: hdlsim.SimRun
+        needs: ["rules-teeth-ns-img.${{ this.view }}", "flags-run-${{ build }}"]
+        with:
+          sim: "${{ sim }}"
+          mode: test
+
+  - name: rules-teeth-ns
+    tags:
+    - std.Test: {name: rules_teeth_ns}
+    strategy:
+      matrix:
+        image: [tlm, xtor]
+      body:
+      - name: "${{ this.image }}"
+        uses: hdltest.svunit.Check
+        needs: ["rules-teeth-ns-run.${{ this.image }}"]
+        with:
+          name: "rules_teeth_ns-${{ this.image }}"
 
   # ---- suites x views. A suite is written against API handles only; a VIEW
   # is the harness that supplies them (tests/env/<view>/). Each (suite,

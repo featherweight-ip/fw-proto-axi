@@ -3,6 +3,7 @@
 module axi_ram_tb;
     import fw_proto_pkg::*;
     import axi_ram_ip_pkg::*;
+    import ip_axi_tb_pkg::*;
     import ram_top_shells_pkg::*;
 
     logic clock = 1'b0;
@@ -18,7 +19,10 @@ module axi_ram_tb;
     // B beats queue up.
     int unsigned max_gap = 8;
     int unsigned r_stalls = 0, b_stalls = 0, r_beats = 0;
+    // The AXI4 rules on the abstractor, by its path (no capacity declared).
+    ip_axi_rules #(P) rules = new;
     initial begin
+        rules.at("dut.s_abs");
         void'($value$plusargs("max_gap=%d", max_gap));
         fw_proto_cfg::set_int("dut.s_abs", "r.max_gap", max_gap);
         fw_proto_cfg::set_int("dut.s_abs", "b.max_gap", max_gap);
@@ -50,6 +54,7 @@ module axi_ram_tb;
         // Polled: Verilator evaluates a wait() expression eagerly, before root.tb exists.
         while (!u_sim.u_root.root.tb.done) @(posedge clock);
         errors += u_sim.u_root.root.tb.n_errors;
+        errors += rules.check("axi_ram");
         // Without the knob the transactor's own buffering stalls R less than
         // one cycle per beat; a random gap of 0..max_gap adds max_gap/2 a beat.
         if (max_gap >= 8 && r_stalls < 2 * r_beats) begin

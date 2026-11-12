@@ -3,6 +3,7 @@
 module axi_crossbar_tb;
     import fw_proto_pkg::*;
     import axi_crossbar_ip_pkg::*;
+    import ip_axi_tb_pkg::*;
     import xbar_top_shells_pkg::*;
 
     logic clock = 1'b0;
@@ -29,6 +30,21 @@ module axi_crossbar_tb;
         end
     end
 
+    // The AXI4 rules on the four abstractors, by path. The master ports' capacity
+    // is M_ISSUE+1 (default 4, so 5 writes and 5 reads per port), not M_ISSUE:
+    // trans_limit only gates the arbiter request, and with two slave ports a new
+    // grant can be issued on the edge where the previous one is acknowledged,
+    // before the count rises (axi_crossbar_rd.v, m_ifaces; likewise _wr). The
+    // capacity rule found this under a teeth mutant (docs/rules.md).
+    ip_axi_rules #(PS) rules_s = new;
+    ip_axi_rules #(PM) rules_m = new;
+    initial begin
+        rules_s.at("dut.s0_abs");
+        rules_s.at("dut.s1_abs");
+        rules_m.at("dut.m0_abs", 5, 5);
+        rules_m.at("dut.m1_abs", 5, 5);
+    end
+
     initial begin
         automatic int errors = 0;
         automatic xbar_api_shell s;
@@ -48,6 +64,7 @@ module axi_crossbar_tb;
         while (!u_sim.u_root.root.tb0.done || !u_sim.u_root.root.tb1.done) @(posedge clock);
         errors += u_sim.u_root.root.tb0.n_errors + u_sim.u_root.root.tb1.n_errors;
         errors += u_sim.u_root.root.mem0.sub.n_errors + u_sim.u_root.root.mem1.sub.n_errors;
+        errors += rules_s.check("axi_crossbar") + rules_m.check("axi_crossbar");
         // ID widening: each memory saw bursts from both slave ports.
         foreach (u_sim.u_root.root.mem0.mem.n_by_top[t])
             if (u_sim.u_root.root.mem0.mem.n_by_top[t] == 0

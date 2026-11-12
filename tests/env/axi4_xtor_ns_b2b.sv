@@ -4,9 +4,11 @@
 // bridge's responses and the subordinate bridge's requests land in inboxes, and
 // the monitor bridge's listener calls are recorded. run() sends N writes and N
 // reads, one at a time, protocol-legal, and checks every beat at the far end, at
-// the monitor, and the checker's counts. It returns "" or the first failure.
+// the monitor, the checker's counts and the AXI4 rules on the monitor's events
+// (plan P7). It returns "" or the first failure.
 module axi4_xtor_ns_b2b
-    import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*;
+    import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*,
+           fw_proto_axi4_rules_pkg::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) ();
     typedef axi4_types #(P)::aw_t aw_t;
     typedef axi4_types #(P)::w_t  w_t;
@@ -88,6 +90,7 @@ module axi4_xtor_ns_b2b
     axi4_mgr_xtor_bridge #(P) mb;
     axi4_sub_xtor_bridge #(P) sb;
     axi4_mon_xtor_bridge #(P) monb;
+    axi4_rules #(P)           rules;     // on the monitor's events (pins)
     axi4_rsp_if_inbox #(P)    m_in;      // what the manager receives
     axi4_req_if_inbox #(P)    s_in;      // what the subordinate receives
     req_rec rq;
@@ -103,6 +106,9 @@ module axi4_xtor_ns_b2b
         rs = new;
         monb.req.add_listener(rq);
         monb.rsp.add_listener(rs);
+        rules = new("b2b", 1);
+        monb.req.add_listener(rules.req);
+        monb.rsp.add_listener(rules.rsp);
         fork
             mb.run();
             sb.run();
@@ -217,5 +223,8 @@ module axi4_xtor_ns_b2b
         if (u_chk.n_err_m != 0 || u_chk.n_err_s != 0)
             err = $sformatf("P(ID_W=%0d) checker: %0d manager, %0d subordinate violations",
                             P.ID_W, u_chk.n_err_m, u_chk.n_err_s);
+        else if (rules.n_fail() != 0)
+            err = $sformatf("P(ID_W=%0d) rules failed: %s (first: %s)", P.ID_W, rules.failed(),
+                            rules.first());
     endtask
 endmodule

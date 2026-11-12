@@ -29,106 +29,14 @@ package demofull_ip_pkg;
                                   HAS_QOS: 1, HAS_REGION: 0};
     localparam logic [31:0] RDATA = 32'h5a5a_5a5a;
 
-    class demofull_rtl extends fw_extern_component;
-        axi4_sub_sp #(P) s;
+    `include "demofull_rtl.svh"
 
-        function new(string name, fw_component parent);
-            super.new(name, parent);
-        endfunction
+    `include "demo_sys.svh"
 
-        virtual function string extern_module(); return "demofull"; endfunction
-
-        function void build();
-            s = new("s", this);
-        endfunction
-
-        virtual function void extern_map(fw_extern_map x);
-            x.param("C_S_AXI_ID_WIDTH", P.ID_W);
-            x.param("C_S_AXI_DATA_WIDTH", P.DATA_W);
-            x.param("C_S_AXI_ADDR_WIDTH", P.ADDR_W);
-            x.clock("S_AXI_ACLK");
-            x.reset("S_AXI_ARESETN", .active_low(1));
-            x.prefix(s, "S_AXI_").upper();
-            // Not AXI: the memory port.
-            x.tie("i_rdata", RDATA);
-            x.open("o_we");
-            x.open("o_waddr");
-            x.open("o_wdata");
-            x.open("o_wstrb");
-            x.open("o_rd");
-            x.open("o_raddr");
-        endfunction
-    endclass
-
-    class demo_sys extends fw_rtl_structural;
-        axi4_sub_sp #(P) s;
-        demofull_rtl     slv;
-
-        function new(string name, fw_component parent);
-            super.new(name, parent);
-        endfunction
-
-        virtual function string module_name(); return "demo_sys"; endfunction
-
-        function void build();
-            s   = new("s", this);
-            slv = new("slv", this);
-        endfunction
-
-        function void connect();
-            s.bind_inner(slv.s);
-        endfunction
-    endclass
-
-    class demo_api extends fw_component;
-        axi4_sub_socket #(P) s;
-        demo_sys             core;
-
-        function new(string name, fw_component parent);
-            super.new(name, parent);
-        endfunction
-
-        function void build();
-            s    = new("s", this);
-            core = new("core", this);
-        endfunction
-
-        function void connect();
-            void'(core.s.connect(s));
-        endfunction
-    endclass
+    `include "demo_api.svh"
     typedef fw_proto_reg #(demo_api, "demo_api") demo_api_reg;
 
-    class demo_tb extends ip_axi_tb #(P);
-        function new(string name, fw_component parent);
-            super.new(name, parent);
-            const_rdata = 1;
-            rdata_value = RDATA;
-            use_wrap    = 1;
-        endfunction
+    `include "demo_tb.svh"
 
-        virtual task tests();
-            single_write_read(16'h0100);
-            random_bursts(16'h1000, 40);
-            concurrent_ids(16'h4000, 4, 10);
-        endtask
-    endclass
-
-    class demo_top extends fw_component;
-        demo_api dut;
-        demo_tb  tb;
-
-        function new(string name, fw_component parent);
-            super.new(name, parent);
-        endfunction
-
-        function void build();
-            dut = demo_api_reg::create("dut", this);
-            tb  = new("tb", this);
-        endfunction
-
-        function void connect();
-            tb.m.connect(dut.s);
-        endfunction
-    endclass
+    `include "demo_top.svh"
 endpackage

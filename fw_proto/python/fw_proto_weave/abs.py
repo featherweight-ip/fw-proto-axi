@@ -16,6 +16,10 @@ class description put RTL behind the bundle's APIs. Emitted with the transactors
                                 listeners attach), joined to the endpoint; knobs set
                                 by its path (fw_proto_cfg) go to the channel
                                 transactors
+    <proto>_observers #(P)      listeners registered by path for the handles, joined
+                                to a handle's proxies when both are registered (how
+                                rules and monitors attach to an inserted
+                                abstractor, by path)
     <proto>_<role>_sp::connect(<proto>_<role>_socket)
                                 (ports.py) inserts <endpoint>_abs under the port
                                 owner's parent and links it to the port
@@ -50,6 +54,15 @@ def _apis(b: Bundle, role: str):
     """(the API ``role`` sends, the API it receives)."""
     req, rsp = api_names(b)
     return (req, rsp) if role == b.roles[0] else (rsp, req)
+
+
+def observers_name(b: Bundle) -> str:
+    return "%s_observers" % b.proto
+
+
+def _api_var(b: Bundle, api: str) -> str:
+    """The handle's proxy member for an API: axi4_req_if -> req."""
+    return api[len(b.proto) + 1:-3]
 
 
 def check(b: Bundle, err) -> bool:
@@ -137,6 +150,60 @@ def render_abs(b: Bundle, role: str) -> str:
     return args_unused("\n".join(out))
 
 
+def render_observers(b: Bundle) -> str:
+    """The registry that joins listeners registered by path to the handles."""
+    name = observers_name(b)
+    req, rsp = api_names(b)
+    rq, rs = _api_var(b, req), _api_var(b, rsp)
+    lreq, lrsp = b.spec(req + "_listener"), b.spec(rsp + "_listener")
+    preq, prsp = b.spec(req + "_proxy"), b.spec(rsp + "_proxy")
+    return "\n".join([
+        "// Listeners attached by path to the abstractor handles of this P. A test",
+        "// registers listeners for a path (add; either may be null); each handle",
+        "// registers its proxies under its path when it is built (attach). Whichever",
+        "// comes second joins them, so the order does not matter as long as both come",
+        "// before the traffic. unused() names the listener paths no handle took (a",
+        "// misspelled path, another P).",
+        "class %s %s;" % (name, b.header),
+        "    static string m_path[$];",
+        "    static %s m_%s[$];" % (lreq, rq),
+        "    static %s m_%s[$];" % (lrsp, rs),
+        "    static bit m_used[$];",
+        "    static string m_h_path[$];",
+        "    static %s m_h_%s[$];" % (preq, rq),
+        "    static %s m_h_%s[$];" % (prsp, rs),
+        "",
+        "    static function void pair(int unsigned i, %s %s, %s %s);" % (preq, rq, prsp, rs),
+        "        if (m_%s[i] != null) %s.add_listener(m_%s[i]);" % (rq, rq, rq),
+        "        if (m_%s[i] != null) %s.add_listener(m_%s[i]);" % (rs, rs, rs),
+        "        m_used[i] = 1;",
+        "    endfunction",
+        "",
+        "    static function void add(string path, %s %s, %s %s);" % (lreq, rq, lrsp, rs),
+        "        m_path.push_back(path);",
+        "        m_%s.push_back(%s);" % (rq, rq),
+        "        m_%s.push_back(%s);" % (rs, rs),
+        "        m_used.push_back(0);",
+        "        foreach (m_h_path[h]) if (m_h_path[h] == path)",
+        "            pair(m_path.size() - 1, m_h_%s[h], m_h_%s[h]);" % (rq, rs),
+        "    endfunction",
+        "",
+        "    static function void attach(string path, %s %s, %s %s);" % (preq, rq, prsp, rs),
+        "        m_h_path.push_back(path);",
+        "        m_h_%s.push_back(%s);" % (rq, rq),
+        "        m_h_%s.push_back(%s);" % (rs, rs),
+        "        foreach (m_path[i]) if (m_path[i] == path) pair(i, %s, %s);" % (rq, rs),
+        "    endfunction",
+        "",
+        "    // The listener paths no handle has taken, comma-separated; \"\" if none.",
+        "    static function string unused();",
+        "        string s;",
+        "        foreach (m_path[i]) if (!m_used[i]) s = {s, (s == \"\") ? \"\" : \", \", m_path[i]};",
+        "        return s;",
+        "    endfunction",
+        "endclass"])
+
+
 def render_handle(b: Bundle, role: str) -> str:
     """The run-time handle of ``render_abs``."""
     name = handle_name(b, role)
@@ -153,7 +220,8 @@ def render_handle(b: Bundle, role: str) -> str:
         "// through %s to the endpoint's peer. Listeners attach to %s and %s."
         % (r_var, s_var, r_var),
         "// Knobs set for its path in fw_proto_cfg (\"<ch>.depth\", \"<ch>.max_gap\")",
-        "// reach the channel transactors when it starts.",
+        "// reach the channel transactors when it starts. Listeners registered for its",
+        "// path (%s) are added to its proxies." % observers_name(b),
         "class %s %s extends fw_component implements fw_runnable;" % (name, b.header),
         "    %s bridge;" % b.spec(bridge),
         "    %s %s;" % (b.spec(sends + "_proxy"), s_var),
@@ -165,6 +233,9 @@ def render_handle(b: Bundle, role: str) -> str:
         "        %s = new();" % r_var,
         "        bridge = new(vif, %s);" % r_var,
         "        %s = new(bridge);" % s_var,
+        "        %s::attach(fw_rel_path(this), %s, %s);" % (b.spec(observers_name(b)),
+                                                      _api_var(b, api_names(b)[0]),
+                                                      _api_var(b, api_names(b)[1])),
         "        parent.add_runnable(this);",
         "    endfunction",
         "",
@@ -208,5 +279,6 @@ def connect_method(b: Bundle, role: str) -> List[str]:
 def render(b: Bundle) -> List[str]:
     """Package items, after the bridges: sockets, abstractors, handles."""
     return ([render_socket(b, r) for r in b.roles]
+            + [render_observers(b)]
             + [render_abs(b, r) for r in b.roles]
             + [render_handle(b, r) for r in b.roles])

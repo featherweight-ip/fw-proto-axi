@@ -15,7 +15,7 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 GOLDEN = os.path.join(HERE, "golden")
 # fw_proto_pkg builds on fw-hdl's component model (fw_hdl_pkg).
 HDL = os.path.join(ROOT, "packages", "fw-hdl", "src")
-INCDIRS = [HDL, os.path.join(ROOT, "fw_proto", "src")]
+INCDIRS = [HDL, os.path.join(ROOT, "fw_proto", "src"), os.path.join(ROOT, "src", "core")]
 INC_ARGS = ["+incdir+" + d for d in INCDIRS]
 HDL_SOURCES = [os.path.join(HDL, f) for f in (
     "fw_clock_xtor_if.sv", "fw_clock_period_xtor_if.sv", "fw_hdl_pkg.sv")]

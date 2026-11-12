@@ -1,10 +1,11 @@
 // One P of axi4_lint_xtor_ns: the generated transactors back to back, with bridges,
 // and the behavioural classes on top (fw_proto_axi4_behav_pkg), each specialized so
-// that the linter checks its body; and the abstractor glue (sockets, abstractors,
-// handles), declared for the same reason.
+// that the linter checks its body; the abstractor glue (sockets, abstractors,
+// handles), declared for the same reason; and the AXI4 rules (fw_proto_axi4_rules_pkg)
+// on the monitor's events.
 module axi4_lint_xtor_ns_b2b
     import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*,
-           fw_proto_axi4_behav_pkg::*;
+           fw_proto_axi4_behav_pkg::*, fw_proto_axi4_rules_pkg::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) (
     input  logic aclk, aresetn
 );
@@ -46,9 +47,12 @@ module axi4_lint_xtor_ns_b2b
     axi4_mem_model #(P)       mem = new;
     axi4_sub_adapter #(P)     sub = new(sb, mem);
     axi4_burst_on_xact #(P)   bx = new(xs, sub);
+    axi4_rules #(P)           rules = new("lint", 1, 4, 4);
     initial begin
         mgr.up = blk;
         mem.rsp = sub;
+        monb.req.add_listener(rules.req);
+        monb.rsp.add_listener(rules.rsp);
     end
     axi4_to_mem #(P, logic [31:0], logic [31:0], logic [3:0])    m32 = new(xs);
     axi4_to_mem #(P, logic [31:0], logic [127:0], logic [15:0])  m128 = new(xs);
@@ -61,4 +65,5 @@ module axi4_lint_xtor_ns_b2b
     axi4_sub_abs_h #(P)  sh;
     axi4_burst_mgr_socket #(P) bms;
     axi4_burst_sub_socket #(P) bss;
+    axi4_observers #(P)  obs;
 endmodule
