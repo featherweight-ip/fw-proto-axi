@@ -18,9 +18,10 @@ be able to resume from this file alone.
 | P6 Abstractors, extern wrapping, reference IPs | done but the deadlock follow-up | `axi_ram`, `demofull`, `axi_crossbar`, presets pass (`dfm run ip`); D11 teeth 9/10 caught (one known gap). See [p6-abstractors.md](p6-abstractors.md), [reference-ips.md](reference-ips.md) |
 | P7 Rules in simulation | done (regression below) | rule library in `fw_proto/src`, nine AXI4 rules in `src/rules`; on every L1/L2/b2b link and every IP abstractor (by path); `rules_teeth` 17/17 both views, `rules_pins` 13/13 (agrees with `axi4_checker`). See [rules.md](rules.md) |
 | P8 Retire the old package | done | old package, cores and suites deleted; `_ns` names dropped; `ci/run.sh` from a clean bootstrap passes (lint-rtl, tests 14/14, fv-cover, fv-prove, fv-teeth). §5 P8 |
+| P9 Docs, Jinja assessment, upstream fixes | in progress | §11 |
 | Later: formal generation (A4), monitor transactions (A5), systems (A6) | not planned in detail | §9 |
 
-**Last update:** 2026-11-12 (P8 done; status notes below). Names: the dated notes from P2 to
+**Last update:** 2026-11-12 (P8 committed and pushed, `e71d2b5`; P9 started, §11). Names: the dated notes from P2 to
 P7 use the `_ns` suite, file and task names of the time; P8(c) (§5) maps them to the
 current ones. The derivation runs as dv-flow tasks: `dfm run woven`
 (`src/flow.yaml`, `svweave.Weave` + `src/weave/sv-weave.yaml`) writes
@@ -284,8 +285,8 @@ P6 status (2026-11-11, see [p6-abstractors.md](p6-abstractors.md)):
   `writing-a-protocol-package.md` (due "P5, finished P7") and `brief-answers.md` (Q3 is
   answered in `rules.md`'s gaps; Q1 in design §3.3; Q2 and Q4 are open).
 
-**Next action:** the deadlock analysis (P6 follow-up); the owed docs above first if they
-are wanted first. P8 is done (2026-11-12).
+**Next action:** P9 (§11). The deadlock analysis is on hold: it is to be done statically,
+not in simulation (decided 2026-11-12). P8 is done, committed and pushed (2026-11-12).
 
 Open question raised by the user, not yet decided: move the weavers' SV text into Jinja
 templates (pilot on `xtors.py`; best as an sv-weave `render(template, ctx)` that keeps the
@@ -759,3 +760,47 @@ Changes made in editable dependencies, for upstreaming. Branch `fw-proto-axi-new
 | Struct payloads lose their typedef name in the emitter (`logic [W-1:0]`) | The generated wrappers and bridges use the struct type directly; the emitter only passes `P` |
 | The fw-hdl abstractor and pin-map work is still uncommitted in another packet | Ported here (D2, P6.1-P6.2). Coordinate before that packet lands its own version |
 | Long BMC (`fv` ~6.5 min) slows P4 iteration | Run it per phase, not per edit; `fv-cover` per commit |
+
+## 11. P9: docs, Jinja assessment, upstream fixes (started 2026-11-12)
+
+Decisions (2026-11-12):
+- Deadlock analysis of the two-way burst API: held; to be done statically, not by run-time
+  tracking. `sub_b_inline` stays the known teeth gap until then.
+- The sv-weave gaps in §8 are fixed by us in `packages/sv-weave` and upstreamed by us.
+- The fw-hdl test failures at HEAD (§8) are resolved here in `packages/fw-hdl` and
+  upstreamed by us.
+- Weaver SV text into Jinja templates: assess feasibility first.
+
+| Task | Deliverable | Status |
+|---|---|---|
+| Owed docs (§7) | `docs/core-spec.md`, `docs/derived-classes.md`, `docs/writing-a-protocol-package.md`, `docs/brief-answers.md` | written, uncommitted |
+| Jinja feasibility | `docs/jinja-feasibility.md`, pilot `docs/jinja-pilot.patch` (not applied) | done: go with conditions, ~4 days |
+| sv-weave fix plan | `docs/upstream-sv-weave.md` | plan done; baseline 227 pass / 3 xfail |
+| fw-hdl test-failure plan | `docs/upstream-fw-hdl.md` | plan done; 64 failures in 8 groups (G1-G8) |
+
+Notes (2026-11-12):
+- Brief found: `axi4-package-brief.md` (repo root), §10 Q1-Q4. Q1, Q3 settled; Q2 partly
+  (PULP struct pins, taxi interface ports open); Q4 open until A4 (`brief-answers.md`).
+- Jinja: pilot on `xtors.py` is byte-identical (17/17 pytest, 12 goldens). Conditions and
+  order in `jinja-feasibility.md`: missing goldens first; sv-weave owns `render()`.
+- sv-weave: branch has no commits, on `v0.1.0` = upstream head. PRs A-D (existing work), then
+  gap 2 (split init file), gap 1 (Weave task up-to-date check + source hash; the stale result
+  is mostly dfm's check), gap 3 (`init: false`, `svweave.Init`). Open: API version (0.1.x vs
+  0.2 and the plugin range), which forge takes the PRs.
+- fw-hdl: upstream still `6f45fe0`; our branch adds no failures. CI never runs
+  `pytest tests/python`. Fixes: E1 merge dv-flow-libsynth `wpk/results-ir`; X1 tool lookup;
+  X2 register front end + mmio sources; X3 XLS test fixes/markers (AES Verilator ~50 GB);
+  X4 CI runs pytest; E2 zuspec-dataclasses arg types; features F1-F3 independent.
+- Design-doc drift found while writing `derived-classes.md` (to fix in `design-new-style.md`):
+  `_base` reports with `$error` not `fw_error`; §3.2/§4.1 still show one `ax_t`; hand-written
+  `axi4_{ax,wd,b,r}_bits` duplicate the generated `axi4_<x>_t_bits(P)` and both are used;
+  burst sockets are hand-written; sockets are classes, the mirror is `axi4_sub_socket`;
+  `connect()`/sockets/abs/observers only with `xtor: true`; `fw_reset`, defaults,
+  `fw_listener`, `fw_default` not in the core header comment; `mon` reserved role;
+  presets are not derived (§4.6); optional fields keep `w1` pins on the transactors.
+
+Decided (2026-11-12): sv-weave goes to 0.2.0 (plugin range defaults move with it). No PRs:
+the sv-weave and fw-hdl work is committed on each `fw-proto-axi-new` branch, merged to that
+repo's `main` and pushed (the PR plans in the upstream docs become the commit order).
+
+Next: implement and merge the sv-weave plan, then the fw-hdl plan; re-run `ci/run.sh` here.
