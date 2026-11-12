@@ -1,4 +1,4 @@
-// The tests: the l2_mem_ns scenarios that apply to a plain RAM (no error
+// The tests: the l2_mem scenarios that apply to a plain RAM (no error
 // ranges, no exclusive access; axi_ram treats WRAP as INCR), checked
 // against axi4_mem_model as the reference (ip_axi_tb).
 class ram_tb extends ip_axi_tb #(P);

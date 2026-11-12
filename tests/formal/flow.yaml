@@ -1,16 +1,15 @@
 # yaml-language-server: $schema=https://dv-flow.github.io/flow.dv.schema.json
 #
-# Formal checks of the pin checker (tests/formal/axi4_checker_fv.sv).
+# Formal checks of the pin checker, the register slice and the generated
+# transactor cores.
 #   dfm run fv-cover    reachability of legal AXI4 behaviour under the
-#                       checker's rules, all assumed (they are not vacuous)
-#                       and of the back-to-back cores (axi4_fv.sv, FV_COVER)
-#   dfm run fv          BMC of the back-to-back cores (axi4_fv.sv)
-#   dfm run fv-teeth    planted bugs (slice, cores, checker) must each be
-#                       caught (tests/formal/teeth.sh)
-#   dfm run fv-prove    unbounded proof of axi4_slice (axi4_slice_fv.sv),
-#                       the cores' only state; the checker-level properties
-#                       of the back-to-back harness are BMC-only (abc pdr
-#                       did not converge on it in 10 min)
+#                       checker's rules, all assumed (axi4_checker_fv.sv; they
+#                       are not vacuous), and of the back-to-back generated
+#                       cores (axi4_fv.sv, FV_COVER)
+#   dfm run fv          BMC of the back-to-back generated cores (axi4_fv.sv)
+#   dfm run fv-teeth    planted bugs (slice, checker; generated cores) must
+#                       each be caught (teeth.sh; fv_b2b.sh teeth)
+#   dfm run fv-prove    unbounded proof of axi4_slice (axi4_slice_fv.sv)
 fragment:
   name: formal
 
@@ -22,7 +21,7 @@ fragment:
       set -e
       OUT="$TASK_RUNDIR/axi4_checker_fv.v"
       sv2v --exclude=Assert -DFORMAL \
-        "${{ rootdir }}/src/types/axi4_types_pkg.sv" \
+        "${{ rootdir }}/src/core/fw_proto_axi4_defs_pkg.sv" \
         "${{ rootdir }}/src/checker/axi4_checker.sv" \
         "${{ rootdir }}/tests/formal/axi4_checker_fv.sv" > "$OUT"
       dfm-out fileset --filetype verilogSource --basedir "$TASK_RUNDIR" axi4_checker_fv.v
@@ -33,31 +32,6 @@ fragment:
     with:
       top: axi4_checker_fv
       depth: 24
-
-  # Back-to-back cores (tests/formal/axi4_fv.sv): manager core -> pins ->
-  # subordinate core, checkers on both user sides and the pins.
-  - name: fv-sv2v
-    uptodate: false
-    shell: bash
-    run: |
-      set -e
-      OUT="$TASK_RUNDIR/axi4_fv.v"
-      sv2v --exclude=Assert -DFORMAL \
-        "${{ rootdir }}/src/types/axi4_types_pkg.sv" \
-        "${{ rootdir }}/src/checker/axi4_checker.sv" \
-        "${{ rootdir }}/src/cores/axi4_slice.sv" \
-        "${{ rootdir }}/src/cores/axi4_mgr_core.sv" \
-        "${{ rootdir }}/src/cores/axi4_sub_core.sv" \
-        "${{ rootdir }}/tests/formal/axi4_stream_chk.sv" \
-        "${{ rootdir }}/tests/formal/axi4_fv.sv" > "$OUT"
-      dfm-out fileset --filetype verilogSource --basedir "$TASK_RUNDIR" axi4_fv.v
-
-  - name: bmc
-    uses: formal.sby.BMC
-    needs: [fv-sv2v]
-    with:
-      top: axi4_fv
-      depth: 16
 
   # formal.sby has no prove mode; run_sby.sh is the same SymbiYosys run.
   # Also covers the slice's full-occupancy case (FV_COVER) so the proof is
@@ -70,15 +44,6 @@ fragment:
       FV_TOP=axi4_slice_fv FV_ENGINE="abc pdr" "${{ rootdir }}/tests/formal/run_sby.sh" prove 8 "$TASK_RUNDIR"
       FV_TOP=axi4_slice_fv FV_DEFINES=-DFV_COVER "${{ rootdir }}/tests/formal/run_sby.sh" cover 8 "$TASK_RUNDIR"
 
-  # Covers of the back-to-back harness (axi4_fv.sv, FV_COVER): burst
-  # write/read complete, reorder across IDs, slices full, full throughput.
-  - name: cover-b2b
-    uptodate: false
-    shell: bash
-    run: |
-      set -e
-      FV_DEFINES=-DFV_COVER "${{ rootdir }}/tests/formal/run_sby.sh" cover 16 "$TASK_RUNDIR"
-
   - name: teeth
     uptodate: false
     shell: bash
@@ -86,31 +51,31 @@ fragment:
       set -e
       "${{ rootdir }}/tests/formal/teeth.sh" "$TASK_RUNDIR"
 
-  # The generated transactors' cores back to back (tests/formal/axi4_fv_ns.sv):
-  # axi4_mgr_xtor_core -> pins -> axi4_sub_xtor_core, the same three checkers as
-  # axi4_fv. fv_ns.sh takes the class-free RTL from the woven-xtor weave.
-  - name: bmc-ns
+  # The generated transactors' cores back to back (tests/formal/axi4_fv.sv):
+  # axi4_mgr_xtor_core -> pins -> axi4_sub_xtor_core, checkers on both user
+  # sides and the pins. fv_b2b.sh takes the class-free RTL from the woven-xtor weave.
+  - name: bmc
     uptodate: false
     needs: [fw.proto.axi.woven-xtor, fw-hdl.hdl.rv-src]
     shell: bash
     run: |
       set -e
-      "${{ rootdir }}/tests/formal/fv_ns.sh" bmc 16 "$TASK_RUNDIR"
+      "${{ rootdir }}/tests/formal/fv_b2b.sh" bmc 16 "$TASK_RUNDIR"
 
-  - name: cover-b2b-ns
+  - name: cover-b2b
     uptodate: false
     needs: [fw.proto.axi.woven-xtor, fw-hdl.hdl.rv-src]
     shell: bash
     run: |
       set -e
-      "${{ rootdir }}/tests/formal/fv_ns.sh" cover 16 "$TASK_RUNDIR"
+      "${{ rootdir }}/tests/formal/fv_b2b.sh" cover 16 "$TASK_RUNDIR"
 
   # Planted bugs in copies of the generated cores and fw-hdl's rv core: each
   # BMC must fail.
-  - name: teeth-ns
+  - name: teeth-gen
     uptodate: false
     needs: [fw.proto.axi.woven-xtor, fw-hdl.hdl.rv-src]
     shell: bash
     run: |
       set -e
-      "${{ rootdir }}/tests/formal/fv_ns.sh" teeth 10 "$TASK_RUNDIR"
+      "${{ rootdir }}/tests/formal/fv_b2b.sh" teeth 10 "$TASK_RUNDIR"

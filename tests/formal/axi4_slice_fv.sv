@@ -1,5 +1,5 @@
-// Unbounded proof of axi4_slice, the only state in axi4_mgr_core and
-// axi4_sub_core (one slice per channel, plain wiring otherwise).
+// Unbounded proof of axi4_slice, the register slice in the middle of the L1
+// link's xtor view (one per channel each way).
 // Run by tests/formal/run_sby.sh (prove mode, abc pdr): `dfm run fv-prove`.
 //
 // The input side is driven by a well-behaved sender (VALID held until

@@ -6,7 +6,7 @@ sv-weave:
   # fw_proto_pkg brings fw-hdl, whose fw_root.sv elaborates only under a
   # top: the stub top keeps the weave's elaboration to the packages.
   sources:
-    files: [weave_ns_top.sv]
-    top: [weave_ns_top]
+    files: [weave_top.sv]
+    top: [weave_top]
   weavers:
   - name: fw_proto_weave:FwProtoWeaver

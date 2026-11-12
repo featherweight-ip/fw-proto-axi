@@ -5,8 +5,8 @@
 #* A workflow file calls this and nothing else, so what a check IS lives in
 #* one place. It runs unchanged on a laptop, which is how it gets debugged.
 #*
-#*   1. bootstrap -- ivpm into a venv, `ivpm update` of the dep-set, then
-#*      fw-hdl's dfm plugin (ivpm does not install it)
+#*   1. bootstrap -- ivpm into a venv, `ivpm update` of the dep-set (which
+#*      also installs fw-hdl, and so its dfm plugin, into packages/python)
 #*   2. dfm run lint-rtl, tests, fv-cover, fv-prove, fv-teeth (and fv, the
 #*      ~6.5 min BMC, when CI_FV_BMC=1) -- each under a timeout, each with
 #*      its own --report bundle; all always run, so one failing does not
@@ -57,10 +57,6 @@ if [ "${CI_SKIP_BOOTSTRAP:-0}" != "1" ]; then
     # -a: clone git URLs as written (HTTPS); a runner has no ssh identity.
     .ci-venv/bin/ivpm update -a -d "$dep_set" \
         || { echo "::error::ivpm update -d $dep_set failed"; exit 1; }
-    # fw-hdl's dfm plugin (fw.hdl.* tasks); the packages venv has no pip.
-    .ci-venv/bin/uv pip install --python packages/python/bin/python --no-deps \
-        -e packages/fw-hdl/python \
-        || { echo "::error::could not install the fw-hdl dfm plugin"; exit 1; }
     direnv allow . || exit 1
     endgroup
 fi

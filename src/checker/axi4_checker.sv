@@ -12,7 +12,7 @@
 // and at most MAX_OUT write-data bursts may run ahead of their AW. Going
 // past that is a checker-capacity failure, reported on the manager side.
 module axi4_checker
-    import axi4_types_pkg::*;
+    import fw_proto_axi4_defs_pkg::*;
 #(
     parameter axi4_param_t P          = AXI4_PARAM_DEFAULT,
     parameter int unsigned MAX_OUT    = 8,
@@ -22,15 +22,16 @@ module axi4_checker
     // hierarchical name) instead of asserting. For tests that plant faults.
     parameter bit          COUNT_ONLY = 1'b0,
     // Field widths, from P. A width of 0 (signal absent) is carried as one
-    // bit, tied off by the user.
+    // bit, tied off by the user. AxQOS and AxREGION are always 4 bits; when
+    // P.HAS_QOS / P.HAS_REGION is 0 the user ties them to 0.
     localparam int unsigned AW_  = P.ADDR_W,
     localparam int unsigned DW_  = P.DATA_W,
-    localparam int unsigned IW_  = (P.ID_W     > 0) ? P.ID_W     : 1,
-    localparam int unsigned AUW_ = (P.AWUSER_W > 0) ? P.AWUSER_W : 1,
-    localparam int unsigned WUW_ = (P.WUSER_W  > 0) ? P.WUSER_W  : 1,
-    localparam int unsigned BUW_ = (P.BUSER_W  > 0) ? P.BUSER_W  : 1,
-    localparam int unsigned RAW_ = (P.ARUSER_W > 0) ? P.ARUSER_W : 1,
-    localparam int unsigned RUW_ = (P.RUSER_W  > 0) ? P.RUSER_W  : 1
+    localparam int unsigned IW_  = w1(P.ID_W),
+    localparam int unsigned AUW_ = w1(P.AWUSER_W),
+    localparam int unsigned WUW_ = w1(P.WUSER_W),
+    localparam int unsigned BUW_ = w1(P.BUSER_W),
+    localparam int unsigned RAW_ = w1(P.ARUSER_W),
+    localparam int unsigned RUW_ = w1(P.RUSER_W)
 ) (
     input logic             aclk,
     input logic             aresetn,
@@ -97,9 +98,9 @@ module axi4_checker
         logic [LW-1:0] addr, logic [2:0] size, logic [7:0] len,
         logic [1:0] burst, logic [7:0] beat);
         int unsigned lo, hi;
-        lo = axi4_beat_lower_lane(axi4_addr_t'(addr), axi4_size_e'(size), len,
+        lo = axi4_beat_lower_lane(axi4_addr64_t'(addr), axi4_size_e'(size), len,
             axi4_burst_e'(burst), int'(beat), BUS_BYTES);
-        hi = axi4_beat_upper_lane(axi4_addr_t'(addr), axi4_size_e'(size), len,
+        hi = axi4_beat_upper_lane(axi4_addr64_t'(addr), axi4_size_e'(size), len,
             axi4_burst_e'(burst), int'(beat), BUS_BYTES);
         for (int i = 0; i < BUS_BYTES; i++)
             lanes[i] = (i >= lo) && (i <= hi);
@@ -398,16 +399,16 @@ module axi4_checker
 
             // A3.4.1 burst rules; A7.2.4 exclusive-access rules.
             if (awvalid) begin
-                `AXI4_CHK_M(axi4_burst_legal(axi4_addr_t'(awaddr), axi4_size_e'(awsize),
+                `AXI4_CHK_M(axi4_burst_legal(axi4_addr64_t'(awaddr), axi4_size_e'(awsize),
                     awlen, axi4_burst_e'(awburst), BUS_BYTES))
                 if (awlock)
-                    `AXI4_CHK_M(axi4_excl_legal(axi4_addr_t'(awaddr), axi4_size_e'(awsize), awlen))
+                    `AXI4_CHK_M(axi4_excl_legal(axi4_addr64_t'(awaddr), axi4_size_e'(awsize), awlen))
             end
             if (arvalid) begin
-                `AXI4_CHK_M(axi4_burst_legal(axi4_addr_t'(araddr), axi4_size_e'(arsize),
+                `AXI4_CHK_M(axi4_burst_legal(axi4_addr64_t'(araddr), axi4_size_e'(arsize),
                     arlen, axi4_burst_e'(arburst), BUS_BYTES))
                 if (arlock)
-                    `AXI4_CHK_M(axi4_excl_legal(axi4_addr_t'(araddr), axi4_size_e'(arsize), arlen))
+                    `AXI4_CHK_M(axi4_excl_legal(axi4_addr64_t'(araddr), axi4_size_e'(arsize), arlen))
             end
 
             // A3.4.1 / A2.3: WLAST on, and only on, beat AWLEN+1 of each

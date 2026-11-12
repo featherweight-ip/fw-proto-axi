@@ -1,8 +1,8 @@
 // axi4_checker on a core's user side: the five packed channel streams
-// (axi4_types_pkg layout) unpacked onto checker pins. ASSUME_MGR /
+// (fw_proto_axi4_defs_pkg layout) unpacked onto checker pins. ASSUME_MGR /
 // ASSUME_SUB as in axi4_checker.
 module axi4_stream_chk
-    import axi4_types_pkg::*;
+    import fw_proto_axi4_defs_pkg::*;
 #(
     parameter axi4_param_t P          = AXI4_PARAM_DEFAULT,
     parameter int unsigned MAX_OUT    = 8,
@@ -10,12 +10,12 @@ module axi4_stream_chk
     parameter bit          ASSUME_SUB = 1'b0,
     localparam int unsigned AW_  = P.ADDR_W,
     localparam int unsigned DW_  = P.DATA_W,
-    localparam int unsigned IW_  = axi4_w1(P.ID_W),
-    localparam int unsigned AUW_ = axi4_w1(P.AWUSER_W),
-    localparam int unsigned WUW_ = axi4_w1(P.WUSER_W),
-    localparam int unsigned BUW_ = axi4_w1(P.BUSER_W),
-    localparam int unsigned RAW_ = axi4_w1(P.ARUSER_W),
-    localparam int unsigned RUW_ = axi4_w1(P.RUSER_W),
+    localparam int unsigned IW_  = w1(P.ID_W),
+    localparam int unsigned AUW_ = w1(P.AWUSER_W),
+    localparam int unsigned WUW_ = w1(P.WUSER_W),
+    localparam int unsigned BUW_ = w1(P.BUSER_W),
+    localparam int unsigned RAW_ = w1(P.ARUSER_W),
+    localparam int unsigned RUW_ = w1(P.RUSER_W),
     localparam int unsigned AWB_ = axi4_ax_bits(P, 1'b0),
     localparam int unsigned WB_  = axi4_wd_bits(P),
     localparam int unsigned BB_  = axi4_b_bits(P),

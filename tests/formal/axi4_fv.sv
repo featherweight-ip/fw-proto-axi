@@ -1,48 +1,53 @@
-// Back-to-back formal harness: axi4_mgr_core -> AXI4 pins -> axi4_sub_core.
-// The manager core's user side and the subordinate core's user side are
-// free inputs. Three checkers:
-//   u_chk_m  manager user side: manager rules ASSUMED (legal requests in),
+// Back-to-back formal harness for the generated transactors' cores (plan P4.3):
+// axi4_mgr_xtor_core -> AXI4 pins -> axi4_sub_xtor_core, the synthesizable part of
+// the generated axi4_{mgr,sub}_xtor (fw-hdl rv cores, payloads spliced onto the
+// pins). The cores' class-side links are free inputs, with three checkers:
+//   u_chk_m  manager link: manager rules ASSUMED (legal requests in),
 //            subordinate rules asserted (responses out are legal);
 //   u_chk_p  the pins: every rule asserted;
-//   u_chk_s  subordinate user side: subordinate rules ASSUMED (legal
-//            responses in), manager rules asserted (requests out are legal).
-// A single reset at the start. `dfm run fv` (BMC); with FV_COVER, the
-// covers at the end (`dfm run fv-cover`).
-//
-// Checker capacity grows downstream: each core's AW slice holds up to 2
-// addresses while W data flows past, so the pins can see 2 more write-data
-// bursts ahead of their AW than the manager user side, and the subordinate
-// user side 2 more again.
+//   u_chk_s  subordinate link: subordinate rules ASSUMED (legal responses in),
+//            manager rules asserted (requests out are legal).
+// The links carry the payload structs' packing, which is the defs package's
+// stream layout, so axi4_stream_chk reads them; the widths are cross-checked at
+// elaboration. A single reset at the start. `dfm run fv` (BMC); with FV_COVER,
+// the covers at the end (`dfm run fv-cover`).
 module axi4_fv
-    import axi4_types_pkg::*;
+    import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_defs_pkg_woven::*;
 #(
     localparam axi4_param_t P = '{ADDR_W: 12, DATA_W: 8, ID_W: 1,
-        AWUSER_W: 0, WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0},
+        AWUSER_W: 0, WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0,
+        HAS_QOS: 1, HAS_REGION: 1},
     localparam int unsigned MAX_OUT = 2,
-    localparam int unsigned AWB_ = axi4_ax_bits(P, 1'b0),
-    localparam int unsigned WB_  = axi4_wd_bits(P),
-    localparam int unsigned BB_  = axi4_b_bits(P),
-    localparam int unsigned ARB_ = axi4_ax_bits(P, 1'b1),
-    localparam int unsigned RB_  = axi4_r_bits(P)
+    localparam int unsigned AWB_ = axi4_aw_t_bits(P),
+    localparam int unsigned WB_  = axi4_w_t_bits(P),
+    localparam int unsigned BB_  = axi4_b_t_bits(P),
+    localparam int unsigned ARB_ = axi4_ar_t_bits(P),
+    localparam int unsigned RB_  = axi4_r_t_bits(P)
 ) (
     input logic            aclk,
     input logic            aresetn,
-    // Manager core user side (requests in, response readies).
+    // Manager core link (requests in, response readies).
     input logic            m_aw_valid, m_w_valid, m_b_ready, m_ar_valid, m_r_ready,
     input logic [AWB_-1:0] m_aw_data,
     input logic [WB_-1:0]  m_w_data,
     input logic [ARB_-1:0] m_ar_data,
-    // Subordinate core user side (request readies, responses in).
+    // Subordinate core link (request readies, responses in).
     input logic            s_aw_ready, s_w_ready, s_b_valid, s_ar_ready, s_r_valid,
     input logic [BB_-1:0]  s_b_data,
     input logic [RB_-1:0]  s_r_data
 );
+    // The generated widths must be the stream layout's (elaboration error if not).
+    if (AWB_ != axi4_ax_bits(P, 1'b0) || WB_ != axi4_wd_bits(P) || BB_ != axi4_b_bits(P)
+            || ARB_ != axi4_ax_bits(P, 1'b1) || RB_ != axi4_r_bits(P)) begin : g_layout
+        width_mismatch_with_stream_layout u_err ();
+    end
+
     logic init = 1'b1;
     always_ff @(posedge aclk) init <= 1'b0;
     always_comb if (init) assume (!aresetn);
     always_comb if (!init) assume (aresetn);
 
-    // Core outputs on the user sides.
+    // Core outputs on the links.
     logic            m_aw_ready, m_w_ready, m_b_valid, m_ar_ready, m_r_valid;
     logic [BB_-1:0]  m_b_data;
     logic [RB_-1:0]  m_r_data;
@@ -64,20 +69,20 @@ module axi4_fv
     logic        awuser, wuser, buser, aruser, ruser;
     logic [P.DATA_W-1:0] wdata, rdata;
 
-    axi4_mgr_core #(.P(P)) u_mgr (
-        .aw_valid(m_aw_valid), .aw_ready(m_aw_ready), .aw_data(m_aw_data),
-        .w_valid(m_w_valid),   .w_ready(m_w_ready),   .w_data(m_w_data),
-        .b_valid(m_b_valid),   .b_ready(m_b_ready),   .b_data(m_b_data),
-        .ar_valid(m_ar_valid), .ar_ready(m_ar_ready), .ar_data(m_ar_data),
-        .r_valid(m_r_valid),   .r_ready(m_r_ready),   .r_data(m_r_data),
+    axi4_mgr_xtor_core #(P) u_mgr (
+        .aw_up_valid(m_aw_valid), .aw_up_ready(m_aw_ready), .aw_up_data(m_aw_data),
+        .w_up_valid(m_w_valid),   .w_up_ready(m_w_ready),   .w_up_data(m_w_data),
+        .b_up_valid(m_b_valid),   .b_up_ready(m_b_ready),   .b_up_data(m_b_data),
+        .ar_up_valid(m_ar_valid), .ar_up_ready(m_ar_ready), .ar_up_data(m_ar_data),
+        .r_up_valid(m_r_valid),   .r_up_ready(m_r_ready),   .r_up_data(m_r_data),
         .*);
 
-    axi4_sub_core #(.P(P)) u_sub (
-        .aw_valid(s_aw_valid), .aw_ready(s_aw_ready), .aw_data(s_aw_data),
-        .w_valid(s_w_valid),   .w_ready(s_w_ready),   .w_data(s_w_data),
-        .b_valid(s_b_valid),   .b_ready(s_b_ready),   .b_data(s_b_data),
-        .ar_valid(s_ar_valid), .ar_ready(s_ar_ready), .ar_data(s_ar_data),
-        .r_valid(s_r_valid),   .r_ready(s_r_ready),   .r_data(s_r_data),
+    axi4_sub_xtor_core #(P) u_sub (
+        .aw_up_valid(s_aw_valid), .aw_up_ready(s_aw_ready), .aw_up_data(s_aw_data),
+        .w_up_valid(s_w_valid),   .w_up_ready(s_w_ready),   .w_up_data(s_w_data),
+        .b_up_valid(s_b_valid),   .b_up_ready(s_b_ready),   .b_up_data(s_b_data),
+        .ar_up_valid(s_ar_valid), .ar_up_ready(s_ar_ready), .ar_up_data(s_ar_data),
+        .r_up_valid(s_r_valid),   .r_up_ready(s_r_ready),   .r_up_data(s_r_data),
         .*);
 
     axi4_stream_chk #(.P(P), .MAX_OUT(MAX_OUT), .ASSUME_MGR(1'b1)) u_chk_m (
@@ -113,25 +118,19 @@ module axi4_fv
             if (rvalid && rready) r_seen <= 1'b1;
         end
     end
-    logic w_hs_q;
-    always_ff @(posedge aclk) w_hs_q <= aresetn && wvalid && wready;
 
     // r_data = {id, data, resp, last, user}: bit 1 is RLAST.
     always_comb if (!init && aresetn) begin
-        // A burst write (len > 0) completes with B at the manager user side.
+        // A burst write (len > 0) completes with B at the manager link.
         c_wr_burst: cover (wr_long && m_b_valid && m_b_ready);
-        // A burst read ends with RLAST at the manager user side.
+        // A burst read ends with RLAST at the manager link.
         c_rd_burst: cover (rd_long && m_r_valid && m_r_ready && m_r_data[1]);
         // Out of order across IDs: the first R returned is for the later AR.
         c_rd_reorder: cover (ar1_after0 && !r_seen && rvalid && rready && rid == 1'b1);
-        // Both slices of a channel full: subordinate AW (pins), manager W,
-        // subordinate R. (Manager AW full needs 4 writes in flight: more
-        // than MAX_OUT.)
-        c_sub_aw_full: cover (!awready);
-        c_mgr_w_full: cover (!m_w_ready);
-        c_sub_r_full: cover (!s_r_ready);
-        // Full throughput through both cores: W beats on consecutive cycles.
-        c_w_b2b: cover (w_hs_q && wvalid && wready);
+        // Backpressure through both cores: a pin channel held, a link refused.
+        c_pin_aw_held: cover (awvalid && !awready);
+        c_mgr_w_busy: cover (m_w_valid && !m_w_ready);
+        c_sub_r_busy: cover (s_r_valid && !s_r_ready);
     end
 `endif
 endmodule

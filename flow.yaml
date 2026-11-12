@@ -27,62 +27,64 @@ package:
   - tests/ip/flow.yaml
 
   tasks:
-  # Synthesizable sources: types, checker, cores (transactors later).
+  # Synthesizable sources: the pin checker (with the defs package) and the
+  # register slice. The generated transactors are linted by lint-xtor.
   - override: src-rtl
-    needs: [types, checker, cores, xtor-sv]
+    needs: [checker, slice]
 
   - override: lint-rtl
-    needs: [lint, lint-xtor-ns]
+    needs: [lint, lint-xtor]
 
   # Verilator lint over everything synthesizable, elaborated from a lint top
-  # (tests/lint). Our own code: held to ZERO findings -- no baseline. A
-  # waiver needs a reason written next to it in lint-waivers.yaml.
+  # (tests/lint/axi4_lint_rtl.sv: the checker and a slice under each test P).
+  # Our own code: held to ZERO findings -- no baseline. A waiver needs a
+  # reason written next to it in lint-waivers.yaml.
   - name: lint-top
     uses: std.FileSet
+    needs: [suites.test-params]
     with:
       type: systemVerilogSource
       base: tests/lint
-      include: [axi4_lint_top.sv, axi4_lint_b2b.sv, axi4_lint_xtor.sv]
+      include: [axi4_lint_rtl_p.sv, axi4_lint_rtl.sv]
 
   - name: lint
     uses: hdllint.Rtl
     needs: [src-rtl, lint-top]
     with:
-      top: [axi4_lint_top]
+      top: [axi4_lint_rtl]
       waivers: lint-waivers.yaml
 
   # The generated transactors (woven-xtor) for the three test P, with their
   # bridges and the behavioural classes (hence --timing: the class side is linted too). Zero findings in
   # this repo's and the generated files; fw-hdl's rv kit is waived by path in
-  # lint-waivers-xtor-ns.yaml (it is linted by fw-hdl).
-  - name: lint-xtor-ns-top
+  # lint-waivers-xtor.yaml (it is linted by fw-hdl).
+  - name: lint-xtor-top
     uses: std.FileSet
     needs: [fw.proto.axi.woven-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, suites.test-params]
     with:
       type: systemVerilogSource
       base: tests/lint
-      include: [axi4_lint_xtor_ns.sv, axi4_lint_xtor_ns_b2b.sv]
+      include: [axi4_lint_xtor.sv, axi4_lint_xtor_b2b.sv]
 
-  - name: lint-xtor-ns
+  - name: lint-xtor
     uses: hdllint.Rtl
-    needs: [lint-xtor-ns-top]
+    needs: [lint-xtor-top]
     with:
       tools: [vlt]
-      top: [axi4_lint_xtor_ns]
+      top: [axi4_lint_xtor]
       args: [--timing]
       fail_on: any
-      waivers: lint-waivers-xtor-ns.yaml
+      waivers: lint-waivers-xtor.yaml
 
   # Every suite in every view: `dfm run tests --tests types`.
   - override: tests
-    needs: [suites.types, suites.chk-teeth, suites.l1-basic, suites.l2-basic, suites.l2-mem,
-            suites.types-ns, suites.weave-ns, suites.bundle-ns, suites.rv-pilot,
-            suites.xtor-ns, suites.l1-ns, suites.l2-ns, suites.l2-mem-ns,
-            suites.rules-teeth-ns, suites.rules-pins-ns]
+    needs: [suites.types, suites.weave, suites.bundle, suites.rv-pilot,
+            suites.xtor, suites.l1, suites.l2, suites.l2-mem,
+            suites.rules-teeth, suites.rules-pins]
 
   # What CI runs on every commit.
   - override: smoke
-    needs: [suites.types, suites.chk-teeth, suites.l1-basic, suites.l2-basic, suites.l2-mem]
+    needs: [suites.types, suites.l1, suites.rules-pins]
 
   # Reference IPs behind the class API (tests/ip/flow.yaml).
   - root: ip
@@ -91,14 +93,14 @@ package:
 
   # Formal (tests/formal/flow.yaml).
   - root: fv
-    desc: Back-to-back formal BMC of the manager and subordinate cores (old and generated)
-    needs: [formal.bmc, formal.bmc-ns]
+    desc: Back-to-back formal BMC of the generated manager and subordinate transactor cores
+    needs: [formal.bmc]
   - root: fv-prove
     desc: Unbounded proof of the cores' register slice (abc pdr)
     needs: [formal.prove]
   - root: fv-cover
     desc: Reachability of legal AXI4 behaviour under the pin checker's rules
-    needs: [formal.checker-cover, formal.cover-b2b, formal.cover-b2b-ns]
+    needs: [formal.checker-cover, formal.cover-b2b]
   - root: fv-teeth
-    desc: Planted bugs in slice, cores (old and generated) and checker must each fail formal
-    needs: [formal.teeth, formal.teeth-ns]
+    desc: Planted bugs in the slice, the checker and the generated cores must each fail formal
+    needs: [formal.teeth, formal.teeth-gen]

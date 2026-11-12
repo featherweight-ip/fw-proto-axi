@@ -1,4 +1,4 @@
-// The parameter sets every new-style test runs over (plan §3.3).
+// The parameter sets every test runs over (plan §3.3).
 package axi4_test_params_pkg;
     import fw_proto_axi4_defs_pkg::*;
 

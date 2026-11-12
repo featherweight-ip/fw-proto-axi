@@ -93,8 +93,8 @@ changes the report.
 
 | Test | Where | Events |
 |---|---|---|
-| `l1_ns`, `l2_ns`, `l2_mem_ns` | the L1 link: `u_link.add_req_listener` / `add_rsp_listener` | the proxies in tlm; segment A's pin monitor in xtor (`at_pins()`) |
-| `l2_ns`, `l2_mem_ns` | the direct path: proxies around `isub` (`isub_px`, `mgr_d_px`) | proxies; responses inside the call |
+| `l1`, `l2`, `l2_mem` | the L1 link: `u_link.add_req_listener` / `add_rsp_listener` | the proxies in tlm; segment A's pin monitor in xtor (`at_pins()`) |
+| `l2`, `l2_mem` | the direct path: proxies around `isub` (`isub_px`, `mgr_d_px`) | proxies; responses inside the call |
 | `axi_ram`, `demofull` | `dut.s_abs`, by path | the abstractor handle's proxies |
 | `axi_crossbar` | `dut.s0_abs`, `dut.s1_abs`; `dut.m0_abs`, `dut.m1_abs` with capacity 5/5 | the abstractor handles' proxies |
 
@@ -130,9 +130,9 @@ burst, so it needs WLAST before the AW acknowledge); no write overshoot was seen
 the bound is the same. The normal crossbar run never saturates a master port, so only
 the mutant showed it: a wrongly declared fact caught by the rule it feeds.
 
-## Teeth (`rules_teeth_ns`)
+## Teeth (`rules_teeth`)
 
-This is the port of `chk_teeth`. Each case plants one bug in traffic over the L1 link
+This is the port of the old `chk_teeth` suite (deleted in P8). Each case plants one bug in traffic over the L1 link
 (both views). The bug comes from a misbehaving subordinate on `axi4_req_if_base`
 (`tsub`) or from a manager calling the link itself. Each case requires three things:
 - exactly its rule fires;
@@ -165,9 +165,9 @@ flags that read's R beat. The rule has no such bound.
 The transactors always hold VALID, so the signal-level faults cannot come through
 the link. They are covered on real pins by the second suite.
 
-## Teeth on pins (`rules_pins_ns`)
+## Teeth on pins (`rules_pins`)
 
-This suite takes `chk_teeth`'s 13 scripted pin sequences, each legal but for one fault,
+This suite takes the old `chk_teeth` suite's 13 scripted pin sequences, each legal but for one fault,
 and watches them twice:
 - by `axi4_checker`, which must count on the side the fault binds, as in `chk_teeth`;
 - by the generated pin monitor (`axi4_mon_xtor`) with the rules on its events, which

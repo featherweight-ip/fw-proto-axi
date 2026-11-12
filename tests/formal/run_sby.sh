@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run SymbiYosys on a harness outside formal.sby (which has no prove mode):
-# $FV_TOP = axi4_fv (default; back-to-back cores), axi4_slice_fv or
-# axi4_checker_fv.
+# $FV_TOP = axi4_slice_fv (default) or axi4_checker_fv. (The generated cores
+# back to back, axi4_fv, run through fv_b2b.sh.)
 # Usage: run_sby.sh <mode: bmc|prove|cover> <depth> <workdir> [src-dir]
 # src-dir defaults to the repo's src (teeth.sh passes a mutated copy).
 # Extra sv2v defines come from $FV_DEFINES; a parameter override for the
@@ -15,12 +15,11 @@ engine=${FV_ENGINE:-smtbmc boolector}
 # The abc engines need a design without x constants (techmap of $shiftx
 # makes them; they become free inputs).
 abc=; [[ $engine == abc* ]] && abc=1
-top=${FV_TOP:-axi4_fv}
+top=${FV_TOP:-axi4_slice_fv}
 mkdir -p $work; work=$(cd $work && pwd)
 sv2v --exclude=Assert -DFORMAL $FV_DEFINES \
-  $src/types/axi4_types_pkg.sv $src/checker/axi4_checker.sv \
-  $src/cores/axi4_slice.sv $src/cores/axi4_mgr_core.sv $src/cores/axi4_sub_core.sv \
-  $here/axi4_checker_fv.sv $here/axi4_stream_chk.sv $here/axi4_slice_fv.sv $here/axi4_fv.sv > $work/$top.v
+  $src/core/fw_proto_axi4_defs_pkg.sv $src/checker/axi4_checker.sv $src/cores/axi4_slice.sv \
+  $here/axi4_checker_fv.sv $here/axi4_slice_fv.sv > $work/$top.v
 cat > $work/${top}_$mode.sby <<SBY
 [options]
 mode $mode

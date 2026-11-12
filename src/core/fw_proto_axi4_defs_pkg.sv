@@ -147,5 +147,36 @@ package fw_proto_axi4_defs_pkg;
             return 1'b0;
         return (addr & (total - 1)) == 0;
     endfunction
+
+    // ------------------------------------------------------------------
+    // Packed channel streams: one vector per beat, the channel's pins in
+    // order, MSB first (the payload structs' packing, as the generated
+    // transactor cores carry them):
+    //   AW/AR {id, addr, len, size, burst, lock, cache, prot, qos, region, user}
+    //   W     {data, strb, last, user}
+    //   B     {id, resp, user}
+    //   R     {id, data, resp, last, user}
+    // An absent ID or USER is carried as one bit, as on the pins. AxQOS and
+    // AxREGION are always 4 bits (held at 0 without HAS_QOS / HAS_REGION).
+    // Each reads only its channel's widths from P.
+    // ------------------------------------------------------------------
+    /* verilator lint_off UNUSEDSIGNAL */
+    function automatic int unsigned axi4_ax_bits(axi4_param_t p, bit rd);
+        return w1(p.ID_W) + p.ADDR_W + 8 + 3 + 2 + 1 + 4 + 3 + 4 + 4
+               + w1(rd ? p.ARUSER_W : p.AWUSER_W);
+    endfunction
+
+    function automatic int unsigned axi4_wd_bits(axi4_param_t p);
+        return p.DATA_W + p.DATA_W / 8 + 1 + w1(p.WUSER_W);
+    endfunction
+
+    function automatic int unsigned axi4_b_bits(axi4_param_t p);
+        return w1(p.ID_W) + 2 + w1(p.BUSER_W);
+    endfunction
+
+    function automatic int unsigned axi4_r_bits(axi4_param_t p);
+        return w1(p.ID_W) + p.DATA_W + 2 + 1 + w1(p.RUSER_W);
+    endfunction
+    /* verilator lint_on UNUSEDSIGNAL */
     /* verilator lint_on UNUSEDPARAM */
 endpackage

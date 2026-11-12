@@ -1,9 +1,0 @@
-# Lint waivers for the generated transactors' lint (task lint-xtor-ns). Our own
-# and the generated files are held to zero findings.
-waivers:
-- rule: "*"
-  path: "*/fw-hdl/src/*"
-  reason: "fw-hdl's rv kit and base package: third-party here, linted in fw-hdl (it carries PROCASSINIT findings of its own)"
-- rule: DECLFILENAME
-  path: "*/sv_weave_init.sv"
-  reason: "sv-weave's generated init file holds package sv_weave_init_pkg; the file name is sv-weave's (to raise there)"

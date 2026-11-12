@@ -32,10 +32,10 @@ TIMEOUT_S = 1200
 
 # name -> (dfm task, how to read its result)
 RUNS = {
-    "l2_ns-tlm":      ("fw.proto.axi.suites.l2-ns-run.tlm", "svunit"),
-    "l2_ns-xtor":     ("fw.proto.axi.suites.l2-ns-run.xtor", "svunit"),
-    "l2_mem_ns-tlm":  ("fw.proto.axi.suites.l2-mem-ns-run.tlm", "svunit"),
-    "l2_mem_ns-xtor": ("fw.proto.axi.suites.l2-mem-ns-run.xtor", "svunit"),
+    "l2-tlm":      ("fw.proto.axi.suites.l2-run.tlm", "svunit"),
+    "l2-xtor":     ("fw.proto.axi.suites.l2-run.xtor", "svunit"),
+    "l2_mem-tlm":  ("fw.proto.axi.suites.l2-mem-run.tlm", "svunit"),
+    "l2_mem-xtor": ("fw.proto.axi.suites.l2-mem-run.xtor", "svunit"),
     "ip-crossbar":    ("fw.proto.axi.ip.axi-crossbar-run", "ip:axi_crossbar"),
 }
 

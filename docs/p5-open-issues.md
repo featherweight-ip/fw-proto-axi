@@ -38,7 +38,7 @@ A new AW field would need edits in three places, and nothing would flag a forgot
 ### Alternatives
 
 **A. Keep it (status quo).** The losses are documented, and per-beat detail is observed
-through the channel listeners (as `l2_ns` `error_responses` does).
+through the channel listeners (as `l2` `error_responses` does).
 - For: smallest API; nothing to do.
 - Against: a subordinate model behind the adapter (the memory model now, a wrapped IP's
   model in P6) cannot return per-beat errors or USER, so the class view of a link is less
@@ -106,7 +106,7 @@ Sequence, about one session:
    classes, and add it to the goldens.
 2. Rework the adapters and the memory model onto it. Add the two shims. `axi4_xact` and
    its field copies shrink to the shims.
-3. Run `l2_ns`/`l2_mem_ns` against the full API, and put back the old suite's per-beat
+3. Run `l2`/`l2_mem` against the full API, and put back the old suite's per-beat
    checks: `error_ranges` expects RRESP OKAY, OKAY, DECERR, DECERR again; WUSER, BUSER and
    RUSER round-trip at `P_WIDE`. Keep the plain-API tests through the shim, including
    `xact_listener`.
@@ -130,9 +130,9 @@ lives only in `aw_t`/`ar_t`, where it belongs, and the plain API speaks in beats
 | Issue | Options | Proposal |
 |---|---|---|
 | Subordinate adapter `max_delay` is in time units (`#n`), through an overridable `delay(n)` | a. keep; b. hand the adapter a clock event (a `virtual` handle or an `event` the env triggers) so it counts cycles | **a**, keep. It only reorders responses, and the delay need not be exact. Revisit if a test needs cycle-exact reordering |
-| `fw_proto_axi4_behav_pkg` not linted at `-Wall` (a few WIDTHEXPAND on address sums) | a. add it to `lint-xtor-ns`; b. its own lint task | **a**: the same top already has the class side and `--timing`. Fix the warnings with explicit casts |
+| `fw_proto_axi4_behav_pkg` not linted at `-Wall` (a few WIDTHEXPAND on address sums) | a. add it to `lint-xtor`; b. its own lint task | **a**: the same top already has the class side and `--timing`. Fix the warnings with explicit casts |
 | Verilator 5.055 faults or runs out of memory on a class `localparam` derived from `$bits(type param)` used in loop bounds and part-selects (`axi4_to_mem` with DATA narrower than the bus) | reduce to a small repro and raise it; or leave only the workaround | Reduce and raise it, with the other Verilator item in the plan's dependency log. Keep the workaround (a run-time member) |
-| Old `l2_basic` xtor `concurrent_ids` fails (checker MAX_OUT 16 against 32 concurrent transactions) | a. raise MAX_OUT in the old harness; b. leave it until P8 deletes the old suites | **b**. It predates this work, its port passes, and P8 removes the old suite. Fixing it costs a change to old code for no lasting value |
+| Old `l2_basic` xtor `concurrent_ids` fails (checker MAX_OUT 16 against 32 concurrent transactions) | a. raise MAX_OUT in the old harness; b. leave it until P8 deletes the old suites | **b** (done: P8 deleted the suite). It predates this work, its port passes, and P8 removes the old suite. Fixing it costs a change to old code for no lasting value |
 | Weaver SV text in Jinja templates (open since P4) | a. now; b. with P6, when the abstractor emitter adds a large generator | **b**: do it when the emitter is written, so the pattern is set once with real templates (pilot on `xtors.py` at that point) |
 
 ## Decisions needed

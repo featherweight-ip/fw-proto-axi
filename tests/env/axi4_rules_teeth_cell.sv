@@ -1,4 +1,4 @@
-// Rule teeth for one P (plan P7, rules_teeth_ns; the port of chk_teeth): each
+// Rule teeth for one P (plan P7, rules_teeth): each
 // case drives the L1 link of the image's view with traffic that is legal but for
 // one planted bug, from a misbehaving model (a subordinate on axi4_req_if_base,
 // tsub) or a manager calling the link directly. The rules on the link must fire
@@ -22,7 +22,7 @@ module axi4_rules_teeth_cell
     // The capacity the rules are told (the checker's MAX_OUT on the link).
     localparam int unsigned CAP = 32;
 
-    axi4_l1_ns_link #(P) u_link ();
+    axi4_l1_link #(P) u_link ();
 
     // The subordinate: answers every write (B once its AW and last W beat are in,
     // in AW order) and every read (its beats, in AR order), EXOKAY for an

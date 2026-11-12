@@ -5,7 +5,7 @@
 // B and RLAST, write data ahead of its address, out-of-order B, interleaved
 // R, a WRAP burst. A single reset at the start.
 module axi4_checker_fv
-    import axi4_types_pkg::*;
+    import fw_proto_axi4_defs_pkg::*;
 (
     input logic        aclk,
     input logic        aresetn,
@@ -22,7 +22,8 @@ module axi4_checker_fv
     input logic [31:0] wdata, rdata
 );
     localparam axi4_param_t P = '{ADDR_W: 16, DATA_W: 32, ID_W: 1,
-        AWUSER_W: 0, WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0};
+        AWUSER_W: 0, WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0,
+        HAS_QOS: 1, HAS_REGION: 1};
 
     axi4_checker #(.P(P), .MAX_OUT(2), .ASSUME_MGR(1'b1), .ASSUME_SUB(1'b1))
         u_checker (.*);

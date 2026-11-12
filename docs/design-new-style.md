@@ -1,6 +1,8 @@
 # fw-proto-axi, new style: design (draft for review)
 
-Status: **draft, 2026-11-11.** Nothing implemented yet. Inputs: `axi4-package-brief.md`
+Status: **implemented, 2026-11-12** (plan P0-P8 done; formal generation A4 and later are
+not). Written as a draft on 2026-11-11, before the work; decisions taken since are in
+[plan-new-style.md](plan-new-style.md). Inputs: `axi4-package-brief.md`
 (the brief), `../../featherweight-hdl/fw-hdl-sv-weave/abstractors.md` and
 `protocol-ports.md`, the existing package in this repo, and sv-weave
 (`packages/sv-weave` in the fw-hdl-sv-weave packet).
@@ -30,7 +32,7 @@ The test of the split: **adding a field to a channel, or a method to an API, sho
 one-line change to the core** that reaches the pins, the pack/unpack, the listeners, the
 monitor and the pin maps without further edits.
 
-### What this removes from today's package
+### What this removes from the old package (deleted in P8)
 
 | Today (hand-written or macro) | New style |
 |---|---|
@@ -95,7 +97,7 @@ classes imports both spec packages; a woven package repeats its spec package's i
 
 In `fw_proto_axi4_defs_pkg`: `axi4_param_t`, `AXI4_PARAM_DEFAULT`, the burst/size/resp enums,
 and the burst arithmetic functions (`beat_addr`, `crosses_4k`, `burst_legal`, …). These carry over from
-`axi4_types_pkg` mostly unchanged. The maximum-width beat structs and `*_bits()` are
+the old `axi4_types_pkg` (deleted in P8) mostly unchanged. The maximum-width beat structs and `*_bits()` are
 dropped.
 
 ### 3.2 Channel payloads
@@ -382,7 +384,7 @@ Both read the same model the weavers already build.
   `axi4_<role>_xtor_core`: the five fw-hdl rv cores and the splice, with the payloads as
   flat vectors in their structs' packing, sized by `axi4_<payload>_bits(P)` from
   `fw_proto_axi4_defs_pkg_woven`. It imports no class package, so sv2v and Yosys read it;
-  `axi4_fv_ns` proves it back to back. `axi4_<role>_xtor` is that core plus the rv
+  `axi4_fv` (`tests/formal`) proves it back to back. `axi4_<role>_xtor` is that core plus the rv
   interfaces of the class side.
 - **Backpressure and queue depth** stay per channel, configured by path (`dut.mem_abs.aw.stall_pct`).
 - **`axi4_checker.sv` is retained as the signal-level reference** until the rule-generated properties (A4) match it. After that it becomes a generated artifact or is retired.
@@ -399,8 +401,8 @@ depth. Both are already listed in the brief (§8).
 core .sv  ──►  svweave.Weave (dfm)  ──►  fw_proto_axi4_core_pkg_woven  (listeners, proxies,
                  fw binding +                                         channel APIs, bridges,
                  fw-proto weavers                                     field tables, presets)
-                                     ──►  fw_proto_axi4_pkg  (hand-written behaviour:
-                                          adapters, mem model, rules; imports both)
+                                     ──►  fw_proto_axi4_behav_pkg  (hand-written: adapters,
+                                          mem model), fw_proto_axi4_rules_pkg (rules)
 ```
 
 - **The weavers are generic** (`fw-proto` weavers). They select by attribute: `has_attr("fw_api")`, `has_attr("fw_proto_bundle")`. Nothing in them names AXI.
@@ -442,7 +444,8 @@ general. **They should be done in sv-weave rather than worked around in every we
 | A4-A6 | As in the brief | As in the brief |
 
 The existing package stays in place and keeps passing CI until A2 has ported its suites.
-Then the old `src/class`, `src/xtor` and `axi4_wire` are deleted.
+Then the old `src/class`, `src/xtor` and `axi4_wire` are deleted. *(Done in P8, with
+`src/types`, the old channel cores and the old suites.)*
 
 ## 8. Open questions for review
 

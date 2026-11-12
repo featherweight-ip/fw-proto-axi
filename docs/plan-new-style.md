@@ -11,16 +11,18 @@ be able to resume from this file alone.
 |---|---|---|
 | P0 Foundations (deps, sv-weave extensions, flow) | done | S5 (weaver file output) done with P4.2 |
 | P1 Generic weavers (bases, listeners, proxies, imps) | done | rv pilot passes (`rv_pilot`); per-field imp (step 2) waits for P6 |
-| P2 AXI4 core specification | done | `types_ns` passes |
+| P2 AXI4 core specification | done | `types` passes |
 | P3 Bundle derivatives + struct-port runtime | mostly done | runtime, field tables, role ports, inboxes, sprint/compare done; pin-map presets wait for fw-hdl `pin`/`prefix` (P6) |
-| P4 Transactors and back-to-back | done | `l1_ns` (2 views × 3 P), stalls by path, `lint-xtor-ns`, `fv` on the generated cores (`axi4_fv_ns`); core spec split into a synthesizable and a class package (D-fv) |
-| P5 Behaviour: adapters, memory model, transaction API | done | streaming `axi4_burst_if` + convenience shim (D10); `l2_ns` 24/24, `l2_mem_ns` 27/27 in both views; `dfm run tests` 18 of 19 (the old `l2_basic` xtor failure) |
+| P4 Transactors and back-to-back | done | `l1` (2 views × 3 P), stalls by path, `lint-xtor`, `fv` on the generated cores (`axi4_fv`); core spec split into a synthesizable and a class package (D-fv) |
+| P5 Behaviour: adapters, memory model, transaction API | done | streaming `axi4_burst_if` + convenience shim (D10); `l2` 24/24, `l2_mem` 27/27 in both views; at P5 `dfm run tests` was 18 of 19 (the old `l2_basic` xtor failure, gone with P8) |
 | P6 Abstractors, extern wrapping, reference IPs | done but the deadlock follow-up | `axi_ram`, `demofull`, `axi_crossbar`, presets pass (`dfm run ip`); D11 teeth 9/10 caught (one known gap). See [p6-abstractors.md](p6-abstractors.md), [reference-ips.md](reference-ips.md) |
-| P7 Rules in simulation | done (regression below) | rule library in `fw_proto/src`, nine AXI4 rules in `src/rules`; on every L1/L2/b2b link and every IP abstractor (by path); `rules_teeth_ns` 17/17 both views, `rules_pins_ns` 13/13 (agrees with `axi4_checker`). See [rules.md](rules.md) |
-| P8 Retire the old package | not started | |
+| P7 Rules in simulation | done (regression below) | rule library in `fw_proto/src`, nine AXI4 rules in `src/rules`; on every L1/L2/b2b link and every IP abstractor (by path); `rules_teeth` 17/17 both views, `rules_pins` 13/13 (agrees with `axi4_checker`). See [rules.md](rules.md) |
+| P8 Retire the old package | done | old package, cores and suites deleted; `_ns` names dropped; `ci/run.sh` from a clean bootstrap passes (lint-rtl, tests 14/14, fv-cover, fv-prove, fv-teeth). §5 P8 |
 | Later: formal generation (A4), monitor transactions (A5), systems (A6) | not planned in detail | §9 |
 
-**Last update:** 2026-11-12 (P7; status notes below). The derivation runs as dv-flow tasks: `dfm run woven`
+**Last update:** 2026-11-12 (P8 done; status notes below). Names: the dated notes from P2 to
+P7 use the `_ns` suite, file and task names of the time; P8(c) (§5) maps them to the
+current ones. The derivation runs as dv-flow tasks: `dfm run woven`
 (`src/flow.yaml`, `svweave.Weave` + `src/weave/sv-weave.yaml`) writes
 `fw_proto_axi4_core_pkg_woven.sv` to `rundir/fw.proto.axi.woven/woven/`. From the core it
 derives:
@@ -33,37 +35,40 @@ derives:
 The runtime they build on is `fw_proto/src/fw_proto_pkg.sv`: `fw_sp_base`, `fw_field_t`,
 `fw_rv_ch` (with `add_ctl`), `fw_inbox`.
 
-Passing (`dfm run tests`: 14 of 15, the failure below; `dfm run lint-rtl`: both lint tasks at zero findings; `formal.bmc-ns`, `cover-b2b-ns`, `teeth-ns` pass):
-- `types_ns` 7/7: burst helpers, lanes, exclusive access, 64-bit addresses;
-- `weave_ns` 5/5: widths, proxy/listener order, remove, fan-out, imp, channel APIs over
+Passing (2026-11-12, `ci/run.sh` from a clean bootstrap: `dfm run tests` 14 of 14 runs; `dfm run lint-rtl` (`lint`, `lint-xtor`) at zero findings; `fv-cover`, `fv-prove`, `fv-teeth` pass; outside the per-commit set, `dfm run fv` (BMC depth 16, 122 s) and `dfm run ip` also pass, logs `rundir/p8d/{fv,ip}.log`):
+- `types` 7/7: burst helpers, lanes, exclusive access, 64-bit addresses;
+- `weave` 5/5: widths, proxy/listener order, remove, fan-out, imp, channel APIs over
   `P_MIN`/`P_DEF`/`P_WIDE`; synthetic `#(type T, int N)` API;
-- `bundle_ns` 5/5: field table vs. the AMBA pin list by hand for all three P;
+- `bundle` 5/5: field table vs. the AMBA pin list by hand for all three P;
   totals vs. `axi4_checker`'s port widths (`P_WIDE`); role-port link/bind/directions;
   sprint/compare with absent fields; tlm link through the channel proxies, an inbox
   stall holding AW only, and a listener's pre/post order;
 - `rv_pilot`: fw-hdl's `tests/rv_proto` run as is and with its sink's
   `FW_RV_TARGET_IMP` replaced by the generated `fw_rv_target_if_imp` (behind an
   `fw_export`); identical sink transcripts (8 beats, same times);
-- `xtor_ns` 3/3: the generated `axi4_{mgr,sub,mon}_xtor` and bridges back to back, one
+- `xtor` 3/3: the generated `axi4_{mgr,sub,mon}_xtor` and bridges back to back, one
   link per P, `axi4_checker` (COUNT_ONLY) at zero; every beat checked at the far end and
   at the monitor (pre and post); fails as it should with a corrupted `wlast` splice;
-- `l1_ns` 15/15 in each view (`tlm`, `xtor`): channels one at a time, all five
+- `l1` 15/15 in each view (`tlm`, `xtor`): channels one at a time, all five
   concurrently, AW stalled while W/AR/R flow, every response code and burst type (EXOKAY
   on exclusive accesses), and stalls set by path, each for `P_MIN`/`P_DEF`/`P_WIDE`.
-  Protocol-legal traffic; in `xtor` the link is generated manager → old `axi4_sub_core`
-  → `axi4_mgr_core` → generated subordinate, with `axi4_checker` (COUNT_ONLY) at zero on
+  Protocol-legal traffic; in `xtor` the link is generated manager → pins → one `axi4_slice`
+  per channel each way → pins → generated subordinate, with `axi4_checker` (COUNT_ONLY) at zero on
   both pin segments. Fails as it should with WLAST forced to 1 (checker counts) and
   with the path-set gaps zeroed (timing check);
-- `lint-xtor-ns` (part of `lint-rtl`): Verilator `-Wall --timing` of the generated
+- `lint-xtor` (part of `lint-rtl`): Verilator `-Wall --timing` of the generated
   wrappers, bridges and woven package for the three P, zero findings (fw-hdl's own files
-  and sv-weave's init-file name waived by path, `lint-waivers-xtor-ns.yaml`);
+  and sv-weave's init-file name waived by path, `lint-waivers-xtor.yaml`);
+- `lint` (part of `lint-rtl`): `axi4_checker` and `axi4_slice` under the three P
+  (`tests/lint/axi4_lint_rtl.sv`), zero findings;
+- `l2`, `l2_mem`, `rules_teeth` in both views, `rules_pins`, `rv_pilot`: see P5 and P7 below;
 - `pytest fw_proto/python/tests`: 17/17 (goldens incl. the nine xtor files and the defs woven package; sv2v of the class-free layer; derived-class
   list, Verilator `-Wall` of the woven package and of each wrapper + bridge for all three P);
 - `pytest packages/sv-weave/tests`: 227 passed (needs Verilator 5.055 first on `PATH`; §3.1).
 
-Old suites: all pass except `l2_basic` xtor view, `concurrent_ids`, which trips the
-checker's MAX_OUT capacity assertion (`axi4_checker.sv:432`). It fails the same way with
-this work's tracked changes stashed, so it predates this work.
+Old suites: deleted in P8. Before that all passed except `l2_basic` xtor view,
+`concurrent_ids` (the checker's MAX_OUT capacity assertion), which predated this work;
+its port (`l2`) passes.
 
 Stale-output gap: a weaver's Python source is not part of the weave's up-to-date check
 (sv-weave hashes only the plugin's version string). After editing
@@ -279,8 +284,8 @@ P6 status (2026-11-11, see [p6-abstractors.md](p6-abstractors.md)):
   `writing-a-protocol-package.md` (due "P5, finished P7") and `brief-answers.md` (Q3 is
   answered in `rules.md`'s gaps; Q1 in design §3.3; Q2 and Q4 are open).
 
-**Next action:** the deadlock analysis (P6 follow-up), or P8 (retire the old package);
-the owed docs above before either if they are wanted first.
+**Next action:** the deadlock analysis (P6 follow-up); the owed docs above first if they
+are wanted first. P8 is done (2026-11-12).
 
 Open question raised by the user, not yet decided: move the weavers' SV text into Jinja
 templates (pilot on `xtors.py`; best as an sv-weave `render(template, ctx)` that keeps the
@@ -366,12 +371,14 @@ src/
   weave/sv-weave.yaml                weave configuration
   behav/                             adapters, memory model, endpoints (hand-written)
   rules/                             AXI4 rules (P7)
+  core/fw_proto_axi4_defs_pkg.sv     its synthesizable part (parameters, encodings, burst helpers)
+  checker/axi4_checker.sv            reference pin checker until A4 (on the defs package)
   cores/axi4_slice.sv                kept
   flow.yaml                          core -> weave -> behav filesets
-  (old: class/ types/ xtor/ checker/ cores/axi4_*_core.sv, deleted in P8)
+  (old class/ types/ xtor/ cores/axi4_*_core.sv: deleted in P8)
 tests/
   weave/        pytest: AXI4-specific golden checks on the woven package
-  unit/         SVUnit suites (new: *_ns_unit_test.sv while the old ones still exist)
+  unit/         SVUnit suites (*_unit_test.sv; `_ns` while the old ones existed, until P8)
   env/          harnesses (tlm, xtor views), test params
   ip/           reference-IP wrapper tests (P6)
   formal/       existing + new
@@ -639,11 +646,26 @@ PULP waits on brief Q2.
 
 ### P8 Retire the old package
 
-- [ ] Delete `src/class`, `src/types`, `src/xtor`, `src/cores/axi4_{mgr,sub}_core.sv` and the old test envs and suites, once every old suite has a passing `_ns` port (§6.2 map).
-- [ ] Rename the `_ns` suites.
-- [ ] Decide `axi4_checker`'s fate (kept as reference until A4).
-- [ ] Update `ci/run.sh` and the flows.
-- Test: `ci/run.sh` passes from a clean bootstrap (`CI_SKIP_BOOTSTRAP` unset).
+Decisions (2026-11-12):
+- `axi4_checker` stays as the reference checker until A4, ported to `fw_proto_axi4_defs_pkg`
+  (which gains `axi4_addr_t` and the `axi4_{ax,wd,b,r}_bits` stream-width helpers). The
+  second parameter struct (`CP`) goes everywhere; `src/types` is deleted.
+- The xtor view of the L1 link keeps RTL in the middle: one `axi4_slice` per channel each
+  way between the two pin segments, in place of the old `axi4_{mgr,sub}_core`.
+- Formal: `axi4_fv`, `bmc`, `cover-b2b` (old cores) go; `prove` (slice), `checker_fv` and the
+  `_ns` runs stay; `teeth` drops its three core mutants.
+
+Steps: (a) port the checker and the L1 xtor link, re-run the suites; (b) delete the old
+code, flows and formal pieces, fix `lint-rtl`/`smoke`; (c) rename the `_ns` suites;
+(d) docs, `ci/run.sh` from a clean bootstrap.
+
+- [x] (a) Checker on the defs package; L1 xtor link on `axi4_slice`. `tests` 21/22 (only the old `l2_basic` xtor), `ip`, `lint-rtl`, `fv`, `fv-prove`, `fv-cover`, `fv-teeth` pass.
+- [x] Delete `src/class`, `src/types`, `src/xtor`, `src/cores/axi4_{mgr,sub}_core.sv` and the old test envs and suites, once every old suite has a passing `_ns` port (§6.2 map). (b) done: `git rm` of those, the old envs/harnesses, `types`/`chk_teeth`/`l1_basic`/`l2_basic`/`l2_mem` suites, old lint tops, `axi4_fv.sv`; the `CHK_P` shims went with them.
+- [x] Rename the `_ns` suites. (c) done: the `_ns`/`-ns` suffix dropped from suites, files, modules, packages and macros (`types_ns`→`types`, … `rules_pins_ns`→`rules_pins`; `axi4_l1_ns_link`→`axi4_l1_link` etc.). Tasks: `lint-xtor-ns`→`lint-xtor` (`lint-waivers-xtor.yaml`, `axi4_lint_xtor{,_b2b}.sv`); formal `bmc-ns`→`bmc`, `cover-b2b-ns`→`cover-b2b`, `teeth-ns`→`teeth-gen` (`teeth` is the slice/checker mutants); `axi4_fv_ns.sv`→`axi4_fv.sv`, `fv_ns.sh`→`fv_b2b.sh`.
+- [x] Decide `axi4_checker`'s fate (kept as reference until A4). On the defs package; linted by the new `tests/lint/axi4_lint_rtl.sv` (checker + slice under P_MIN/P_DEF/P_WIDE).
+- [x] Update `ci/run.sh` and the flows. (b): `src/flow.yaml` keeps `checker`, `slice` (no `cores`); `src-rtl` = checker + slice; `lint` on `axi4_lint_rtl`; `smoke` = types_ns + l1_ns + rules_pins_ns; `fv` = bmc-ns, `fv-cover` = checker-cover + cover-b2b-ns; formal drops fv-sv2v/bmc/cover-b2b, `teeth.sh` its 3 core mutants. `ci/run.sh` needed no change then. (d): its bootstrap failed installing fw-hdl's dfm plugin from `packages/fw-hdl/python` (fw-hdl's `pyproject.toml` is now at its root, and `ivpm update` installs fw-hdl editable, entry point included), so that step is dropped from `ci/run.sh` and `README.md`.
+- [x] (d) Docs: `README.md` and `docs/overview.md` rewritten for the new structure; stale names fixed in the design, P5, P6, rules and reference-IP notes.
+- [x] Test: `ci/run.sh` passes from a clean bootstrap (`CI_SKIP_BOOTSTRAP` unset; `rundir/fw.proto.axi.*` removed first; the bootstrap reuses every package in `packages/`): lint-rtl, tests 14/14, fv-cover, fv-prove, fv-teeth. Log `rundir/p8d/ci.log`. Before committing: `tests/lint/axi4_lint_rtl.sv` and `axi4_lint_rtl_p.sv` are untracked and must be added, or `lint-rtl` fails on a clean checkout.
 
 ## 6. Test plan summary
 
@@ -662,16 +684,19 @@ PULP waits on brief Q2.
 
 ### 6.2 Old suite → new suite
 
-| Old | New | Phase |
-|---|---|---|
-| `types_unit_test` | `types_ns` | P2 |
-| `l1_basic` | `l1_ns` | P4 |
-| `l2_basic` (incl. backpressure) | `l2_ns` | P5 |
-| `l2_mem` | `l2_mem_ns` | P5 |
-| `chk_teeth` | `rules_teeth_ns` (+ checker cross-check) | P7 |
-| formal `axi4_fv` | re-pointed at generated wrappers | P4 |
-| formal `axi4_slice_fv`, `axi4_checker_fv`, `teeth.sh` | unchanged | — |
-| lint tops | extended with generated wrappers | P4 |
+The old suites were deleted in P8, and the `_ns` suffix dropped (P8(c)); the last column is
+the name today.
+
+| Old | New (P2-P7) | Final (P8) | Phase |
+|---|---|---|---|
+| `types_unit_test` | `types_ns` | `types` | P2 |
+| `l1_basic` | `l1_ns` | `l1` | P4 |
+| `l2_basic` (incl. backpressure) | `l2_ns` | `l2` | P5 |
+| `l2_mem` | `l2_mem_ns` | `l2_mem` | P5 |
+| `chk_teeth` | `rules_teeth_ns` (+ checker cross-check), `rules_pins_ns` | `rules_teeth`, `rules_pins` | P7 |
+| formal `axi4_fv` | re-pointed at generated wrappers (`axi4_fv_ns`) | `axi4_fv` (`fv_b2b.sh`; old one deleted) | P4, P8 |
+| formal `axi4_slice_fv`, `axi4_checker_fv`, `teeth.sh` | unchanged | unchanged (`teeth.sh` lost its 3 core mutants; `teeth-gen` for the generated cores) | P8 |
+| lint tops | extended with generated wrappers (`lint-xtor-ns`) | `axi4_lint_rtl` (`lint`), `axi4_lint_xtor` (`lint-xtor`) | P4, P8 |
 
 ## 7. Documentation plan
 
@@ -705,11 +730,12 @@ Changes made in editable dependencies, for upstreaming. Branch `fw-proto-axi-new
 | slang (pyslang 12.1.0) | Bug found: two distinct packed structs with the same members are taken for one type in an interface's type parameter (`virtual ifc #(b_t)` resolves as `ifc #(a_t)`), so legal vif assignments fail. Repro: two `typedef struct packed {logic [3:0] a;}` in a class, `ifc #(a_t) ia(); ifc #(b_t) ib();`, assign each to its vif. Worked around: the `woven-xtor` weave elaborates under an empty stub top (`src/weave/xtor_weave_top.sv`) so verify does not elaborate the wrappers; Verilator lints them | to raise (slang) |
 | sv-weave | A woven package now repeats its user package's wildcard imports (`SvPackage.imports`, `frontend/model.py`; `run.py` `new_pkg`), so woven code sees the user package's scope; golden `two_packages` updated; test `test_woven_package_repeats_user_imports`. 227 tests pass | done, uncommitted, branch `fw-proto-axi-new` |
 | fw-hdl | Bug found by `axi4_fv_ns`: the rv cores' `valid` (initiator) / `up_valid` (target, monitor) were registers cleared only at the first reset edge, so undefined in the first reset cycle (AXI A3.1.2 needs VALID low throughout reset). Now gated: `assign valid = valid_q & !reset` (`fw_rv_{initiator,target,monitor}_xtor_core.sv`). fw-hdl's own core proof (`tests/rv_proto/formal/fw_rv_cores_fv.sv`) held valid stable into a mid-run reset; its two hold properties now exempt cycles with reset high. `tests/rv_proto` 9/9; the full fw-hdl suite has 45 failures (mmio/regblock, xls, order), identical on a clean worktree of fw-hdl HEAD, so not from this work | done, uncommitted, branch `fw-proto-axi-new` |
-| sv-weave | `sv_weave_init.sv` declares `sv_weave_init_pkg`, so Verilator `-Wall` reports DECLFILENAME on it; waived by path in `lint-waivers-xtor-ns.yaml` | to raise |
+| sv-weave | `sv_weave_init.sv` declares `sv_weave_init_pkg`, so Verilator `-Wall` reports DECLFILENAME on it; waived by path in `lint-waivers-xtor.yaml` | to raise |
 | Verilator 5.055 | Bug found: internal fault (V3Param "Expected module parameterization") on a virtual interface whose type parameter is a class-scoped type of a parameter (`virtual fw_rv_target_xtor_if #(ty #(P)::b_t)`). Worked around in the generated code: a local `typedef ty #(P)::b_t b_t;` first | to raise (Verilator) |
 | sv-weave | Gap found: two `svweave.Weave` tasks in one image both define `sv_weave_init_pkg`. Worked around by weaving the test sources in one run (`tests/weave/sv-weave.yaml`) | to raise |
 | fw-hdl | rv transactor run-time `depth`/`max_gap`; monitor first-valid event (`up_first`/`up_xfer`, `get_ev`); `tests/rv_proto/rv_knobs_tb.sv`, `test_runtime_knobs` (`src/std/rv/fw_rv_{initiator,target,monitor}_xtor_if.sv`, `fw_rv_monitor_xtor{,_core}.sv`). Lint: the new state (`gap_left`, `drawn`) has no declaration initializer, so `-Wall` adds nothing to fw-hdl's existing PROCASSINIT warnings | done, uncommitted, branch `fw-proto-axi-new` |
 | fw-proto-axi (this) | `ivpm.yaml`: yosys (sby) declared directly (was only via fw-hdl) | done, uncommitted |
+| fw-proto-axi (this) | `ci/run.sh`: the separate `uv pip install -e packages/fw-hdl/python` step dropped; fw-hdl's `pyproject.toml` moved to its root and `ivpm update` now installs it (with the dfm plugin) (P8(d)) | done, uncommitted |
 | fw-hdl | Found at HEAD `6f45fe0`, not caused here: 42 regmap/regblock/mmio/structural_top tests fail (register sources omit the now-required `parent` argument; `dma_channel_regs` has no registers). `test_knobs::test_dfm_resolve` assumes a standalone checkout (`packages/python/bin/dfm`) | to raise |
 | Verilator 5.055 | Bug found: internal fault (endless recursion after V3Class; segfault or OOM) on a class `localparam` from `$bits(type param)` used in nested loop bounds and part-select indices, with the indexed queue filled by an interface-class call. Reduced repro with script and notes: `repro/verilator-class-localparam/`. Worked around in `axi4_to_mem` (a run-time member) | to raise / fix (repro saved) |
 | fw-hdl | `fw_extern` `pin`/`prefix` (from fw-hdl-sv-weave) + bit-slice form | planned (P6) |

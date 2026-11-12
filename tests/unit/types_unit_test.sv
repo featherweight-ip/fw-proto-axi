@@ -1,10 +1,11 @@
-// Types suite: the burst address helpers of axi4_types_pkg against worked
-// examples of the IHI0022H A3.4.1 / A3.4.2 rules. No harness.
+// Types suite: the burst helpers of fw_proto_axi4_core_pkg against
+// worked examples of the IHI0022H A3.4.1 / A3.4.2 / A7.2.4 rules.
+// The helpers take 64-bit addresses whatever P is. No harness.
 `include "svunit_defines.svh"
 
 module types_unit_test;
     import svunit_pkg::svunit_testcase;
-    import axi4_types_pkg::*;
+    import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_core_pkg::*;
 
     string name = "types_ut";
     svunit_testcase svunit_ut;
@@ -68,6 +69,23 @@ module types_unit_test;
         `FAIL_IF(axi4_burst_legal(64'h0000, AXI4_SIZE_4, 8'd0, AXI4_BURST_RSVD, 8))
         `FAIL_UNLESS(axi4_burst_legal(64'h0FC0, AXI4_SIZE_4, 8'd15, AXI4_BURST_WRAP, 8))
         `FAIL_UNLESS(axi4_burst_legal(64'h0000, AXI4_SIZE_1, 8'd255, AXI4_BURST_INCR, 8))
+    `SVTEST_END
+
+    `SVTEST(exclusive)
+        `FAIL_UNLESS(axi4_excl_legal(64'h0040, AXI4_SIZE_4, 8'd3))   // 16 B at 16 B
+        `FAIL_IF(axi4_excl_legal(64'h0044, AXI4_SIZE_4, 8'd3))       // unaligned to the total
+        `FAIL_IF(axi4_excl_legal(64'h0000, AXI4_SIZE_4, 8'd2))       // 12 B: not a power of 2
+        `FAIL_IF(axi4_excl_legal(64'h0000, AXI4_SIZE_16, 8'd15))     // 256 B > 128
+        `FAIL_IF(axi4_excl_legal(64'h0000, AXI4_SIZE_1, 8'd16))      // 17 transfers
+        `FAIL_UNLESS(axi4_excl_legal(64'h0000, AXI4_SIZE_128, 8'd0)) // 128 B
+    `SVTEST_END
+
+    // Above 4 GB: the helpers carry the full 64 bits.
+    `SVTEST(high_address)
+        `FAIL_UNLESS_EQUAL(axi4_beat_addr(64'h1_0000_0FF8, AXI4_SIZE_8, 8'd1,
+                                          AXI4_BURST_INCR, 1), 64'h1_0000_1000)
+        `FAIL_UNLESS(axi4_crosses_4k(64'hFFFF_FFFF_FFFF_EFF8, AXI4_SIZE_8, 8'd1, AXI4_BURST_INCR))
+        `FAIL_IF(axi4_crosses_4k(64'hFFFF_FFFF_FFFF_EFF0, AXI4_SIZE_8, 8'd1, AXI4_BURST_INCR))
     `SVTEST_END
 
     `SVUNIT_TESTS_END

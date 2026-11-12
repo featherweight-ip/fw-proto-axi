@@ -9,123 +9,46 @@ fragment:
   - name: svunit
     uses: hdltest.svunit.Lib
 
-  # ---- suite: types (no harness: pure functions of axi4_types_pkg)
-  - name: types-tests
-    uses: std.FileSet
-    with:
-      type: svunitTest
-      base: unit
-      include: [types_unit_test.sv]
-
-  - name: types-runner
-    uses: hdltest.svunit.TestRunner
-    needs: [types-tests]
-
-  - name: types-bench
-    passthrough: all
-    needs: [fw.proto.axi.types, types-runner]
-
-  - name: types-img
-    uses: hdlsim.SimImage
-    needs: [svunit, types-bench, flags-img]
-    with:
-      sim: "${{ sim }}"
-      top: [testrunner]
-
-  - name: types-run
-    uses: hdlsim.SimRun
-    needs: [types-img, "flags-run-${{ build }}"]
-    with:
-      sim: "${{ sim }}"
-      mode: test
-
-  - name: types
-    uses: hdltest.svunit.Check
-    needs: [types-run]
-    with:
-      name: types
-    tags:
-    - std.Test: {name: types}
-
-  # ---- suite: chk_teeth (axi4_checker standalone, COUNT_ONLY, planted pin
-  # faults; no harness, one view)
-  - name: chk-teeth-tests
-    uses: std.FileSet
-    with:
-      type: svunitTest
-      base: unit
-      include: [chk_teeth_unit_test.sv]
-
-  - name: chk-teeth-runner
-    uses: hdltest.svunit.TestRunner
-    needs: [chk-teeth-tests]
-
-  - name: chk-teeth-bench
-    passthrough: all
-    needs: [fw.proto.axi.types, fw.proto.axi.checker, chk-teeth-runner]
-
-  - name: chk-teeth-img
-    uses: hdlsim.SimImage
-    needs: [svunit, chk-teeth-bench, flags-img]
-    with:
-      sim: "${{ sim }}"
-      top: [testrunner]
-
-  - name: chk-teeth-run
-    uses: hdlsim.SimRun
-    needs: [chk-teeth-img, "flags-run-${{ build }}"]
-    with:
-      sim: "${{ sim }}"
-      mode: test
-
-  - name: chk-teeth
-    uses: hdltest.svunit.Check
-    needs: [chk-teeth-run]
-    with:
-      name: chk_teeth
-    tags:
-    - std.Test: {name: chk_teeth}
-
-  # ---- suite: rules_pins_ns (plan P7): chk_teeth's pin sequences watched by the
+  # ---- suite: rules_pins (plan P7): scripted pin sequences watched by the
   # checker and by the pin monitor with the AXI4 rules; the verdicts must agree.
-  - name: rules-pins-ns-tests
+  - name: rules-pins-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [rules_pins_ns_unit_test.sv]
+      include: [rules_pins_unit_test.sv]
 
-  - name: rules-pins-ns-runner
+  - name: rules-pins-runner
     uses: hdltest.svunit.TestRunner
-    needs: [rules-pins-ns-tests]
+    needs: [rules-pins-tests]
 
-  - name: rules-pins-ns-bench
+  - name: rules-pins-bench
     passthrough: all
-    needs: [fw.proto.axi.types, fw.proto.axi.checker, fw.proto.axi.rules-xtor, rules-pins-ns-runner]
+    needs: [fw.proto.axi.checker, fw.proto.axi.rules-xtor, rules-pins-runner]
 
-  - name: rules-pins-ns-img
+  - name: rules-pins-img
     uses: hdlsim.SimImage
-    needs: [svunit, rules-pins-ns-bench, flags-img]
+    needs: [svunit, rules-pins-bench, flags-img]
     with:
       sim: "${{ sim }}"
       top: [testrunner]
 
-  - name: rules-pins-ns-run
+  - name: rules-pins-run
     uses: hdlsim.SimRun
-    needs: [rules-pins-ns-img, "flags-run-${{ build }}"]
+    needs: [rules-pins-img, "flags-run-${{ build }}"]
     with:
       sim: "${{ sim }}"
       mode: test
 
-  - name: rules-pins-ns
+  - name: rules-pins
     uses: hdltest.svunit.Check
-    needs: [rules-pins-ns-run]
+    needs: [rules-pins-run]
     with:
-      name: rules_pins_ns
+      name: rules_pins
     tags:
-    - std.Test: {name: rules_pins_ns}
+    - std.Test: {name: rules_pins}
 
-  # ---- suite: weave_ns (new style: the classes fw_proto derives from the
+  # ---- suite: weave (the classes fw_proto derives from the
   # AXI4 core and from a synthetic API, over P_MIN/P_DEF/P_WIDE; no harness)
   - name: weave-synth-src
     uses: std.FileSet
@@ -135,7 +58,7 @@ fragment:
       include: [weave_synth_pkg.sv]
 
   # One weave over the core and the synthetic API (tests/weave/sv-weave.yaml).
-  - name: weave-ns-woven
+  - name: weave-woven
     uses: svweave.Weave
     needs: [fw.proto.axi.core, weave-synth-src]
     with:
@@ -148,42 +71,42 @@ fragment:
       base: env
       include: [axi4_test_params_pkg.sv]
 
-  - name: weave-ns-tests
+  - name: weave-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [weave_ns_unit_test.sv]
+      include: [weave_unit_test.sv]
 
-  - name: weave-ns-runner
+  - name: weave-runner
     uses: hdltest.svunit.TestRunner
-    needs: [weave-ns-tests]
+    needs: [weave-tests]
 
-  - name: weave-ns-bench
+  - name: weave-bench
     passthrough: all
-    needs: [weave-ns-woven, test-params, weave-ns-runner]
+    needs: [weave-woven, test-params, weave-runner]
 
-  - name: weave-ns-img
+  - name: weave-img
     uses: hdlsim.SimImage
-    needs: [svunit, weave-ns-bench, flags-img]
+    needs: [svunit, weave-bench, flags-img]
     with:
       sim: "${{ sim }}"
       top: [testrunner]
 
-  - name: weave-ns-run
+  - name: weave-run
     uses: hdlsim.SimRun
-    needs: [weave-ns-img, "flags-run-${{ build }}"]
+    needs: [weave-img, "flags-run-${{ build }}"]
     with:
       sim: "${{ sim }}"
       mode: test
 
-  - name: weave-ns
+  - name: weave
     uses: hdltest.svunit.Check
-    needs: [weave-ns-run]
+    needs: [weave-run]
     with:
-      name: weave_ns
+      name: weave
     tags:
-    - std.Test: {name: weave_ns}
+    - std.Test: {name: weave}
 
   # ---- suite: rv_pilot (plan P1): the fw-proto weaver on fw-hdl's ready/valid
   # APIs. fw-hdl's tests/rv_proto runs twice -- as is, and with its sink's
@@ -270,599 +193,286 @@ fragment:
     tags:
     - std.Test: {name: rv_pilot}
 
-  # ---- suite: types_ns (new style: the core's burst helpers; plan P2)
-  - name: types-ns-tests
+  # ---- suite: types (the core's burst helpers; plan P2)
+  - name: types-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [types_ns_unit_test.sv]
+      include: [types_unit_test.sv]
 
-  - name: types-ns-runner
+  - name: types-runner
     uses: hdltest.svunit.TestRunner
-    needs: [types-ns-tests]
+    needs: [types-tests]
 
-  - name: types-ns-bench
+  - name: types-bench
     passthrough: all
-    needs: [fw.proto.axi.core, types-ns-runner]
+    needs: [fw.proto.axi.core, types-runner]
 
-  - name: types-ns-img
+  - name: types-img
     uses: hdlsim.SimImage
-    needs: [svunit, types-ns-bench, flags-img]
+    needs: [svunit, types-bench, flags-img]
     with:
       sim: "${{ sim }}"
       top: [testrunner]
 
-  - name: types-ns-run
+  - name: types-run
     uses: hdlsim.SimRun
-    needs: [types-ns-img, "flags-run-${{ build }}"]
+    needs: [types-img, "flags-run-${{ build }}"]
     with:
       sim: "${{ sim }}"
       mode: test
 
-  - name: types-ns
+  - name: types
     uses: hdltest.svunit.Check
-    needs: [types-ns-run]
+    needs: [types-run]
     with:
-      name: types_ns
+      name: types
     tags:
-    - std.Test: {name: types_ns}
+    - std.Test: {name: types}
 
-  # ---- suite: bundle_ns (new style: what fw_proto derives from axi4_bundle:
+  # ---- suite: bundle (what fw_proto derives from axi4_bundle:
   # field tables, role ports, inboxes, payload helpers, tlm link; plan P3)
-  - name: bundle-ns-tests
+  - name: bundle-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [bundle_ns_unit_test.sv]
+      include: [bundle_unit_test.sv]
 
-  - name: bundle-ns-runner
+  - name: bundle-runner
     uses: hdltest.svunit.TestRunner
-    needs: [bundle-ns-tests]
+    needs: [bundle-tests]
 
-  - name: bundle-ns-bench
+  - name: bundle-bench
     passthrough: all
-    needs: [weave-ns-woven, test-params, bundle-ns-runner]
+    needs: [weave-woven, test-params, bundle-runner]
 
-  - name: bundle-ns-img
+  - name: bundle-img
     uses: hdlsim.SimImage
-    needs: [svunit, bundle-ns-bench, flags-img]
+    needs: [svunit, bundle-bench, flags-img]
     with:
       sim: "${{ sim }}"
       top: [testrunner]
 
-  - name: bundle-ns-run
+  - name: bundle-run
     uses: hdlsim.SimRun
-    needs: [bundle-ns-img, "flags-run-${{ build }}"]
+    needs: [bundle-img, "flags-run-${{ build }}"]
     with:
       sim: "${{ sim }}"
       mode: test
 
-  - name: bundle-ns
+  - name: bundle
     uses: hdltest.svunit.Check
-    needs: [bundle-ns-run]
+    needs: [bundle-run]
     with:
-      name: bundle_ns
+      name: bundle
     tags:
-    - std.Test: {name: bundle_ns}
+    - std.Test: {name: bundle}
 
-  # ---- suite: xtor_ns (plan P4.2): the generated transactors and bridges back
+  # ---- suite: xtor (plan P4.2): the generated transactors and bridges back
   # to back, one link per P, axi4_checker (COUNT_ONLY) on each.
-  - name: xtor-ns-env
+  - name: xtor-env
     uses: std.FileSet
     with:
       type: systemVerilogSource
       base: env
-      include: [axi4_xtor_ns_b2b.sv]
+      include: [axi4_xtor_b2b.sv]
 
-  - name: xtor-ns-tests
+  - name: xtor-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [xtor_ns_unit_test.sv]
+      include: [xtor_unit_test.sv]
 
-  - name: xtor-ns-runner
+  - name: xtor-runner
     uses: hdltest.svunit.TestRunner
-    needs: [xtor-ns-tests]
+    needs: [xtor-tests]
 
-  - name: xtor-ns-bench
+  - name: xtor-bench
     passthrough: all
     needs: [fw.proto.axi.woven-xtor, fw.proto.axi.rules-xtor, fw.proto.axi.checker, test-params,
-            xtor-ns-env, xtor-ns-runner]
+            xtor-env, xtor-runner]
 
-  - name: xtor-ns-img
+  - name: xtor-img
     uses: hdlsim.SimImage
-    needs: [svunit, xtor-ns-bench, flags-img]
+    needs: [svunit, xtor-bench, flags-img]
     with:
       sim: "${{ sim }}"
       top: [testrunner]
 
-  - name: xtor-ns-run
+  - name: xtor-run
     uses: hdlsim.SimRun
-    needs: [xtor-ns-img, "flags-run-${{ build }}"]
+    needs: [xtor-img, "flags-run-${{ build }}"]
     with:
       sim: "${{ sim }}"
       mode: test
 
-  - name: xtor-ns
+  - name: xtor
     uses: hdltest.svunit.Check
-    needs: [xtor-ns-run]
+    needs: [xtor-run]
     with:
-      name: xtor_ns
+      name: xtor
     tags:
-    - std.Test: {name: xtor_ns}
+    - std.Test: {name: xtor}
 
-  # ---- suite: l1_ns (plan P4.3): l1_basic on the new channel API, each view
-  # x three P. A view is the axi4_l1_ns_link module the image compiles
-  # (env/<view>/axi4_l1_ns_link.sv); the suite and the cells are shared.
-  - name: l1-ns-cell
+  # ---- suite: l1 (plan P4.3): the channel contract on the channel API, each view
+  # x three P. A view is the axi4_l1_link module the image compiles
+  # (env/<view>/axi4_l1_link.sv); the suite and the cells are shared.
+  - name: l1-cell
     uses: std.FileSet
     with:
       type: systemVerilogSource
       base: env
-      include: [axi4_l1_ns_cell.sv]
+      include: [axi4_l1_cell.sv]
 
-  - name: l1-ns-link-tlm
+  - name: l1-link-tlm
     uses: std.FileSet
     needs: [fw.proto.axi.woven]
     with:
       type: systemVerilogSource
       base: env/tlm
-      include: [axi4_l1_ns_link.sv]
+      include: [axi4_l1_link.sv]
 
-  - name: l1-ns-link-xtor
+  - name: l1-link-xtor
     uses: std.FileSet
-    needs: [fw.proto.axi.woven-xtor, fw.proto.axi.checker, fw.proto.axi.cores]
+    needs: [fw.proto.axi.woven-xtor, fw.proto.axi.checker, fw.proto.axi.slice]
     with:
       type: systemVerilogSource
       base: env/xtor
-      include: [axi4_l1_ns_link.sv]
+      include: [axi4_l1_link.sv]
 
-  - name: l1-ns-tests
+  - name: l1-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [l1_ns_unit_test.sv]
+      include: [l1_unit_test.sv]
 
-  - name: l1-ns-runner
+  - name: l1-runner
     uses: hdltest.svunit.TestRunner
-    needs: [l1-ns-tests]
+    needs: [l1-tests]
 
-  - name: l1-ns-bench-tlm
+  - name: l1-bench-tlm
     passthrough: all
-    needs: [l1-ns-link-tlm, fw.proto.axi.rules, test-params, l1-ns-cell, l1-ns-runner]
+    needs: [l1-link-tlm, fw.proto.axi.rules, test-params, l1-cell, l1-runner]
 
-  - name: l1-ns-bench-xtor
+  - name: l1-bench-xtor
     passthrough: all
-    needs: [l1-ns-link-xtor, fw.proto.axi.rules-xtor, test-params, l1-ns-cell, l1-ns-runner]
+    needs: [l1-link-xtor, fw.proto.axi.rules-xtor, test-params, l1-cell, l1-runner]
 
-  - name: l1-ns-img
+  - name: l1-img
     strategy:
       select:
         axes:
           view: [tlm, xtor]
       body:
       - uses: hdlsim.SimImage
-        needs: [svunit, "l1-ns-bench-${{ this.view }}", flags-img]
+        needs: [svunit, "l1-bench-${{ this.view }}", flags-img]
         with:
           sim: "${{ sim }}"
           top: [testrunner]
 
-  - name: l1-ns-run
+  - name: l1-run
     strategy:
       select:
         axes:
           view: [tlm, xtor]
       body:
       - uses: hdlsim.SimRun
-        needs: ["l1-ns-img.${{ this.view }}", "flags-run-${{ build }}"]
+        needs: ["l1-img.${{ this.view }}", "flags-run-${{ build }}"]
         with:
           sim: "${{ sim }}"
           mode: test
 
-  - name: l1-ns
+  - name: l1
     tags:
-    - std.Test: {name: l1_ns}
+    - std.Test: {name: l1}
     strategy:
       matrix:
         image: [tlm, xtor]
       body:
       - name: "${{ this.image }}"
         uses: hdltest.svunit.Check
-        needs: ["l1-ns-run.${{ this.image }}"]
+        needs: ["l1-run.${{ this.image }}"]
         with:
-          name: "l1_ns-${{ this.image }}"
+          name: "l1-${{ this.image }}"
 
-  # ---- suite: l2_ns (plan P5): l2_basic on the transaction API through the adapters, each view x three P, over the
-  # L1 link of the view (env/<view>/axi4_l1_ns_link.sv) and axi4_l2_ns_env.
-  - name: l2-ns-cell
+  # ---- suite: l2 (plan P5): whole transactions on the transaction API through the adapters, each view x three P, over the
+  # L1 link of the view (env/<view>/axi4_l1_link.sv) and axi4_l2_env.
+  - name: l2-cell
     uses: std.FileSet
     with:
       type: systemVerilogSource
       base: env
-      include: [axi4_l2_ns_pkg.sv, axi4_l2_ns_env.sv, axi4_l2_ns_cell.sv]
+      include: [axi4_l2_pkg.sv, axi4_l2_env.sv, axi4_l2_cell.sv]
 
-  - name: l2-ns-tests
+  - name: l2-tests
     uses: std.FileSet
     with:
       type: svunitTest
       base: unit
-      include: [l2_ns_unit_test.sv]
+      include: [l2_unit_test.sv]
 
-  - name: l2-ns-runner
+  - name: l2-runner
     uses: hdltest.svunit.TestRunner
-    needs: [l2-ns-tests]
+    needs: [l2-tests]
 
-  - name: l2-ns-bench-tlm
+  - name: l2-bench-tlm
     passthrough: all
-    needs: [l1-ns-link-tlm, fw.proto.axi.behav, fw.proto.axi.rules, test-params, l2-ns-cell, l2-ns-runner]
+    needs: [l1-link-tlm, fw.proto.axi.behav, fw.proto.axi.rules, test-params, l2-cell, l2-runner]
 
-  - name: l2-ns-bench-xtor
+  - name: l2-bench-xtor
     passthrough: all
-    needs: [l1-ns-link-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, test-params, l2-ns-cell, l2-ns-runner]
+    needs: [l1-link-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, test-params, l2-cell, l2-runner]
 
-  - name: l2-ns-img
+  - name: l2-img
     strategy:
       select:
         axes:
           view: [tlm, xtor]
       body:
       - uses: hdlsim.SimImage
-        needs: [svunit, "l2-ns-bench-${{ this.view }}", flags-img]
+        needs: [svunit, "l2-bench-${{ this.view }}", flags-img]
         with:
           sim: "${{ sim }}"
           top: [testrunner]
 
-  - name: l2-ns-run
+  - name: l2-run
     strategy:
       select:
         axes:
           view: [tlm, xtor]
       body:
       - uses: hdlsim.SimRun
-        needs: ["l2-ns-img.${{ this.view }}", "flags-run-${{ build }}"]
+        needs: ["l2-img.${{ this.view }}", "flags-run-${{ build }}"]
         with:
           sim: "${{ sim }}"
           mode: test
 
-  - name: l2-ns
+  - name: l2
     tags:
-    - std.Test: {name: l2_ns}
+    - std.Test: {name: l2}
     strategy:
       matrix:
         image: [tlm, xtor]
       body:
       - name: "${{ this.image }}"
         uses: hdltest.svunit.Check
-        needs: ["l2-ns-run.${{ this.image }}"]
+        needs: ["l2-run.${{ this.image }}"]
         with:
-          name: "l2_ns-${{ this.image }}"
+          name: "l2-${{ this.image }}"
 
-  # ---- suite: l2_mem_ns (plan P5): l2_mem: the memory model and fw_mem_if through the adapters, each view x three P, over the
-  # L1 link of the view (env/<view>/axi4_l1_ns_link.sv) and axi4_l2_ns_env.
-  - name: l2-mem-ns-cell
+  # ---- suite: l2_mem (plan P5): the memory model and fw_mem_if through the adapters, each view x three P, over the
+  # L1 link of the view (env/<view>/axi4_l1_link.sv) and axi4_l2_env.
+  - name: l2-mem-cell
     uses: std.FileSet
     with:
       type: systemVerilogSource
       base: env
-      include: [axi4_l2_ns_pkg.sv, axi4_l2_ns_env.sv, axi4_l2_mem_ns_cell.sv]
+      include: [axi4_l2_pkg.sv, axi4_l2_env.sv, axi4_l2_mem_cell.sv]
 
-  - name: l2-mem-ns-tests
-    uses: std.FileSet
-    with:
-      type: svunitTest
-      base: unit
-      include: [l2_mem_ns_unit_test.sv]
-
-  - name: l2-mem-ns-runner
-    uses: hdltest.svunit.TestRunner
-    needs: [l2-mem-ns-tests]
-
-  - name: l2-mem-ns-bench-tlm
-    passthrough: all
-    needs: [l1-ns-link-tlm, fw.proto.axi.behav, fw.proto.axi.rules, test-params, l2-mem-ns-cell, l2-mem-ns-runner]
-
-  - name: l2-mem-ns-bench-xtor
-    passthrough: all
-    needs: [l1-ns-link-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, test-params, l2-mem-ns-cell, l2-mem-ns-runner]
-
-  - name: l2-mem-ns-img
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimImage
-        needs: [svunit, "l2-mem-ns-bench-${{ this.view }}", flags-img]
-        with:
-          sim: "${{ sim }}"
-          top: [testrunner]
-
-  - name: l2-mem-ns-run
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimRun
-        needs: ["l2-mem-ns-img.${{ this.view }}", "flags-run-${{ build }}"]
-        with:
-          sim: "${{ sim }}"
-          mode: test
-
-  - name: l2-mem-ns
-    tags:
-    - std.Test: {name: l2_mem_ns}
-    strategy:
-      matrix:
-        image: [tlm, xtor]
-      body:
-      - name: "${{ this.image }}"
-        uses: hdltest.svunit.Check
-        needs: ["l2-mem-ns-run.${{ this.image }}"]
-        with:
-          name: "l2_mem_ns-${{ this.image }}"
-
-  # ---- suite: rules_teeth_ns (plan P7, the port of chk_teeth): one planted bug
-  # per case over the L1 link, from a misbehaving model or the manager; exactly
-  # its rule must fire, and with pins the link's axi4_checker must agree.
-  - name: rules-teeth-ns-cell
-    uses: std.FileSet
-    with:
-      type: systemVerilogSource
-      base: env
-      include: [axi4_rules_teeth_cell.sv]
-
-  - name: rules-teeth-ns-tests
-    uses: std.FileSet
-    with:
-      type: svunitTest
-      base: unit
-      include: [rules_teeth_ns_unit_test.sv]
-
-  - name: rules-teeth-ns-runner
-    uses: hdltest.svunit.TestRunner
-    needs: [rules-teeth-ns-tests]
-
-  - name: rules-teeth-ns-bench-tlm
-    passthrough: all
-    needs: [l1-ns-link-tlm, fw.proto.axi.rules, test-params, rules-teeth-ns-cell, rules-teeth-ns-runner]
-
-  - name: rules-teeth-ns-bench-xtor
-    passthrough: all
-    needs: [l1-ns-link-xtor, fw.proto.axi.rules-xtor, test-params, rules-teeth-ns-cell, rules-teeth-ns-runner]
-
-  - name: rules-teeth-ns-img
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimImage
-        needs: [svunit, "rules-teeth-ns-bench-${{ this.view }}", flags-img]
-        with:
-          sim: "${{ sim }}"
-          top: [testrunner]
-
-  - name: rules-teeth-ns-run
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimRun
-        needs: ["rules-teeth-ns-img.${{ this.view }}", "flags-run-${{ build }}"]
-        with:
-          sim: "${{ sim }}"
-          mode: test
-
-  - name: rules-teeth-ns
-    tags:
-    - std.Test: {name: rules_teeth_ns}
-    strategy:
-      matrix:
-        image: [tlm, xtor]
-      body:
-      - name: "${{ this.image }}"
-        uses: hdltest.svunit.Check
-        needs: ["rules-teeth-ns-run.${{ this.image }}"]
-        with:
-          name: "rules_teeth_ns-${{ this.image }}"
-
-  # ---- suites x views. A suite is written against API handles only; a VIEW
-  # is the harness that supplies them (tests/env/<view>/). Each (suite,
-  # view) cell is one image and one run: `dfm run tests --tests l1_basic`.
-
-  # The envs every suite shares (axi4_test_pkg: L1 env, generators).
-  - name: test-env
-    uses: std.FileSet
-    needs: [fw.proto.axi.class]
-    with:
-      type: systemVerilogSource
-      base: env
-      include: [axi4_test_pkg.sv]
-
-  # One harness per (level, view); each defines module axi4_l<N>_harness.
-  - name: l1-harness-tlm
-    uses: std.FileSet
-    needs: [test-env]
-    with:
-      type: systemVerilogSource
-      base: env/tlm
-      include: [axi4_l1_harness.sv]
-      incdirs: [.]
-
-  - name: l1-harness-xtor
-    uses: std.FileSet
-    needs: [test-env, fw.proto.axi.xtor-class, fw.proto.axi.checker]
-    with:
-      type: systemVerilogSource
-      base: env/xtor
-      include: [axi4_l1_harness.sv]
-      incdirs: [.]
-
-  - name: l2-harness-tlm
-    uses: std.FileSet
-    needs: [test-env]
-    with:
-      type: systemVerilogSource
-      base: env/tlm
-      include: [axi4_l2_harness.sv]
-      incdirs: [.]
-
-  - name: l2-harness-xtor
-    uses: std.FileSet
-    needs: [test-env, fw.proto.axi.xtor-class, fw.proto.axi.checker]
-    with:
-      type: systemVerilogSource
-      base: env/xtor
-      include: [axi4_l2_harness.sv]
-      incdirs: [.]
-
-  - name: mem-harness-tlm
-    uses: std.FileSet
-    needs: [test-env]
-    with:
-      type: systemVerilogSource
-      base: env/tlm
-      include: [axi4_mem_harness.sv]
-      incdirs: [.]
-
-  - name: mem-harness-xtor
-    uses: std.FileSet
-    needs: [test-env, fw.proto.axi.xtor-class, fw.proto.axi.checker]
-    with:
-      type: systemVerilogSource
-      base: env/xtor
-      include: [axi4_mem_harness.sv]
-      incdirs: [.]
-
-  # ---- suite: l1_basic
-  - name: l1-basic-tests
-    uses: std.FileSet
-    with:
-      type: svunitTest
-      base: unit
-      include: [l1_basic_unit_test.sv]
-
-  - name: l1-basic-runner
-    uses: hdltest.svunit.TestRunner
-    needs: [l1-basic-tests]
-    with:
-      harness: [axi4_l1_harness]
-
-  # What one view compiles besides SVUnit: its harness (and through it the
-  # env and the class layer), then the suite.
-  - name: l1-basic-bench-tlm
-    passthrough: all
-    needs: [l1-harness-tlm, l1-basic-runner]
-
-  - name: l1-basic-bench-xtor
-    passthrough: all
-    needs: [l1-harness-xtor, l1-basic-runner]
-
-  - name: l1-basic-img
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimImage
-        needs: [svunit, "l1-basic-bench-${{ this.view }}", flags-img]
-        with:
-          sim: "${{ sim }}"
-          top: [testrunner]
-
-  - name: l1-basic-run
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimRun
-        needs: ["l1-basic-img.${{ this.view }}", "flags-run-${{ build }}"]
-        with:
-          sim: "${{ sim }}"
-          mode: test
-
-  # The view axis is `image`: the project's test runner (hdlsim) reads views
-  # from that axis name; the test name comes from the tag on the matrix task.
-  - name: l1-basic
-    tags:
-    - std.Test: {name: l1_basic}
-    strategy:
-      matrix:
-        image: [tlm, xtor]
-      body:
-      - name: "${{ this.image }}"
-        uses: hdltest.svunit.Check
-        needs: ["l1-basic-run.${{ this.image }}"]
-        with:
-          name: "l1_basic-${{ this.image }}"
-
-  # ---- suite: l2_basic
-  - name: l2-basic-tests
-    uses: std.FileSet
-    with:
-      type: svunitTest
-      base: unit
-      include: [l2_basic_unit_test.sv]
-
-  - name: l2-basic-runner
-    uses: hdltest.svunit.TestRunner
-    needs: [l2-basic-tests]
-    with:
-      harness: [axi4_l2_harness]
-
-  - name: l2-basic-bench-tlm
-    passthrough: all
-    needs: [l2-harness-tlm, l2-basic-runner]
-
-  - name: l2-basic-bench-xtor
-    passthrough: all
-    needs: [l2-harness-xtor, l2-basic-runner]
-
-  - name: l2-basic-img
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimImage
-        needs: [svunit, "l2-basic-bench-${{ this.view }}", flags-img]
-        with:
-          sim: "${{ sim }}"
-          top: [testrunner]
-
-  - name: l2-basic-run
-    strategy:
-      select:
-        axes:
-          view: [tlm, xtor]
-      body:
-      - uses: hdlsim.SimRun
-        needs: ["l2-basic-img.${{ this.view }}", "flags-run-${{ build }}"]
-        with:
-          sim: "${{ sim }}"
-          mode: test
-
-  - name: l2-basic
-    tags:
-    - std.Test: {name: l2_basic}
-    strategy:
-      matrix:
-        image: [tlm, xtor]
-      body:
-      - name: "${{ this.image }}"
-        uses: hdltest.svunit.Check
-        needs: ["l2-basic-run.${{ this.image }}"]
-        with:
-          name: "l2_basic-${{ this.image }}"
-
-  # ---- suite: l2_mem
   - name: l2-mem-tests
     uses: std.FileSet
     with:
@@ -873,16 +483,14 @@ fragment:
   - name: l2-mem-runner
     uses: hdltest.svunit.TestRunner
     needs: [l2-mem-tests]
-    with:
-      harness: [axi4_mem_harness]
 
   - name: l2-mem-bench-tlm
     passthrough: all
-    needs: [mem-harness-tlm, l2-mem-runner]
+    needs: [l1-link-tlm, fw.proto.axi.behav, fw.proto.axi.rules, test-params, l2-mem-cell, l2-mem-runner]
 
   - name: l2-mem-bench-xtor
     passthrough: all
-    needs: [mem-harness-xtor, l2-mem-runner]
+    needs: [l1-link-xtor, fw.proto.axi.behav-xtor, fw.proto.axi.rules-xtor, test-params, l2-mem-cell, l2-mem-runner]
 
   - name: l2-mem-img
     strategy:
@@ -920,3 +528,69 @@ fragment:
         needs: ["l2-mem-run.${{ this.image }}"]
         with:
           name: "l2_mem-${{ this.image }}"
+
+  # ---- suite: rules_teeth (plan P7): one planted bug
+  # per case over the L1 link, from a misbehaving model or the manager; exactly
+  # its rule must fire, and with pins the link's axi4_checker must agree.
+  - name: rules-teeth-cell
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: env
+      include: [axi4_rules_teeth_cell.sv]
+
+  - name: rules-teeth-tests
+    uses: std.FileSet
+    with:
+      type: svunitTest
+      base: unit
+      include: [rules_teeth_unit_test.sv]
+
+  - name: rules-teeth-runner
+    uses: hdltest.svunit.TestRunner
+    needs: [rules-teeth-tests]
+
+  - name: rules-teeth-bench-tlm
+    passthrough: all
+    needs: [l1-link-tlm, fw.proto.axi.rules, test-params, rules-teeth-cell, rules-teeth-runner]
+
+  - name: rules-teeth-bench-xtor
+    passthrough: all
+    needs: [l1-link-xtor, fw.proto.axi.rules-xtor, test-params, rules-teeth-cell, rules-teeth-runner]
+
+  - name: rules-teeth-img
+    strategy:
+      select:
+        axes:
+          view: [tlm, xtor]
+      body:
+      - uses: hdlsim.SimImage
+        needs: [svunit, "rules-teeth-bench-${{ this.view }}", flags-img]
+        with:
+          sim: "${{ sim }}"
+          top: [testrunner]
+
+  - name: rules-teeth-run
+    strategy:
+      select:
+        axes:
+          view: [tlm, xtor]
+      body:
+      - uses: hdlsim.SimRun
+        needs: ["rules-teeth-img.${{ this.view }}", "flags-run-${{ build }}"]
+        with:
+          sim: "${{ sim }}"
+          mode: test
+
+  - name: rules-teeth
+    tags:
+    - std.Test: {name: rules_teeth}
+    strategy:
+      matrix:
+        image: [tlm, xtor]
+      body:
+      - name: "${{ this.image }}"
+        uses: hdltest.svunit.Check
+        needs: ["rules-teeth-run.${{ this.image }}"]
+        with:
+          name: "rules_teeth-${{ this.image }}"
