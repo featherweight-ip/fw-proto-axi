@@ -8,7 +8,7 @@ only see ``Api`` objects, so both kinds get identical derivatives.
 import dataclasses as dc
 from typing import Dict, List, Optional
 
-from sv_weave.frontend.decl import SvDecl, SvDeclArg, SvDeclMethod
+from sv_weave.api import SvDecl, SvDeclArg, SvDeclMethod
 
 ATTR_API = "fw_api"
 ATTR_LISTENER = "fw_listener"

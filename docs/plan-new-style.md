@@ -59,7 +59,8 @@ Passing (2026-11-12, `ci/run.sh` from a clean bootstrap: `dfm run tests` 14 of 1
   with the path-set gaps zeroed (timing check);
 - `lint-xtor` (part of `lint-rtl`): Verilator `-Wall --timing` of the generated
   wrappers, bridges and woven package for the three P, zero findings (fw-hdl's own files
-  and sv-weave's init-file name waived by path, `lint-waivers-xtor.yaml`);
+  waived by path, `lint-waivers-xtor.yaml`; sv-weave 0.2 splits its init file, so no
+  DECLFILENAME waiver);
 - `lint` (part of `lint-rtl`): `axi4_checker` and `axi4_slice` under the three P
   (`tests/lint/axi4_lint_rtl.sv`), zero findings;
 - `l2`, `l2_mem`, `rules_teeth` in both views, `rules_pins`, `rv_pilot`: see P5 and P7 below;
@@ -71,10 +72,8 @@ Old suites: deleted in P8. Before that all passed except `l2_basic` xtor view,
 `concurrent_ids` (the checker's MAX_OUT capacity assertion), which predated this work;
 its port (`l2`) passes.
 
-Stale-output gap: a weaver's Python source is not part of the weave's up-to-date check
-(sv-weave hashes only the plugin's version string). After editing
-`fw_proto/python/fw_proto_weave`, delete `rundir/fw.proto.axi.*woven*` (or bump the
-weaver's `version`) before `dfm run`.
+Stale-output gap: fixed in sv-weave 0.2.0 (the Weave task's up-to-date check hashes
+the weaver's source and the config's content); an edited weaver re-weaves on `dfm run`.
 
 **P4.1 done (2026-11-11):** fw-hdl's rv transactors have run-time `depth` and `max_gap`,
 and the monitor reports first-valid events (`get_ev`). fw-hdl's tests that touch the rv
@@ -722,18 +721,18 @@ Changes made in editable dependencies, for upstreaming. Branch `fw-proto-axi-new
 | Repo | Change | Status |
 |---|---|---|
 | fw-proto-axi (this) | `ivpm.yaml`: sv-weave dev dep | done, uncommitted |
-| sv-weave | S1-S3: `frontend/decl.py` (`SvDecl`), `.decl` on `SvGenericClass`/`SvClass` (`frontend/model.py`), `tests/unit/test_decl.py` | done, uncommitted, branch `fw-proto-axi-new` |
+| sv-weave | S1-S3: `frontend/decl.py` (`SvDecl`), `.decl` on `SvGenericClass`/`SvClass` (`frontend/model.py`), `tests/unit/test_decl.py` | in sv-weave 0.2.0 (`main`, 2026-11-12) |
 | sv-weave | S4: none needed | — |
-| sv-weave | S6 `sources.top` (config) / `SourceSpec.tops`: the top modules slang elaborates (`frontend/loader.py`, `verify.py`, `config.py`, `filelist.py`, hash in `run.py`; 3 tests in `test_loader.py`). Needed to weave fw-hdl: `fw_root`'s `type Tbind = int` cannot elaborate as an implicit top | done, uncommitted, branch `fw-proto-axi-new` |
-| sv-weave | Fix in S1: `decl.py` `_txt` rebuilds text from tokens, so a comment before `interface` no longer hides it (`is_interface` was false for fw-hdl's rv APIs) and comments stay out of headers and types; test in `test_decl.py` | done, uncommitted, branch `fw-proto-axi-new` |
-| sv-weave | Gap found: the run's input hash covers a plugin's version string, not its source, so an edited weaver gives a stale "up to date" result under dfm | to raise |
-| sv-weave | S5 weaver file output: `DesignCtx.add_file(name, text)` (`weave/design.py`, `bus.py` passes `files`), rendered with the header and origin line map (`render.render_file`), compiled after `sv_weave_init.sv`, verified like the packages; clashes with sv-weave's own file names and differing re-adds are errors (`run.py`); 8 tests in `test_design.py` | done, uncommitted, branch `fw-proto-axi-new` |
+| sv-weave | S6 `sources.top` (config) / `SourceSpec.tops`: the top modules slang elaborates (`frontend/loader.py`, `verify.py`, `config.py`, `filelist.py`, hash in `run.py`; 3 tests in `test_loader.py`). Needed to weave fw-hdl: `fw_root`'s `type Tbind = int` cannot elaborate as an implicit top | in sv-weave 0.2.0 (`main`, 2026-11-12) |
+| sv-weave | Fix in S1: `decl.py` `_txt` rebuilds text from tokens, so a comment before `interface` no longer hides it (`is_interface` was false for fw-hdl's rv APIs) and comments stay out of headers and types; test in `test_decl.py` | in sv-weave 0.2.0 (`main`, 2026-11-12) |
+| sv-weave | Gap found: the run's input hash covers a plugin's version string, not its source, so an edited weaver gives a stale "up to date" result under dfm | fixed in sv-weave 0.2.0 (`main`, 2026-11-12); no forced re-weave needed here |
+| sv-weave | S5 weaver file output: `DesignCtx.add_file(name, text)` (`weave/design.py`, `bus.py` passes `files`), rendered with the header and origin line map (`render.render_file`), compiled after `sv_weave_init.sv`, verified like the packages; clashes with sv-weave's own file names and differing re-adds are errors (`run.py`); 8 tests in `test_design.py` | in sv-weave 0.2.0 (`main`, 2026-11-12) |
 | slang (pyslang 12.1.0) | Bug found: two distinct packed structs with the same members are taken for one type in an interface's type parameter (`virtual ifc #(b_t)` resolves as `ifc #(a_t)`), so legal vif assignments fail. Repro: two `typedef struct packed {logic [3:0] a;}` in a class, `ifc #(a_t) ia(); ifc #(b_t) ib();`, assign each to its vif. Worked around: the `woven-xtor` weave elaborates under an empty stub top (`src/weave/xtor_weave_top.sv`) so verify does not elaborate the wrappers; Verilator lints them | to raise (slang) |
-| sv-weave | A woven package now repeats its user package's wildcard imports (`SvPackage.imports`, `frontend/model.py`; `run.py` `new_pkg`), so woven code sees the user package's scope; golden `two_packages` updated; test `test_woven_package_repeats_user_imports`. 227 tests pass | done, uncommitted, branch `fw-proto-axi-new` |
+| sv-weave | A woven package now repeats its user package's wildcard imports (`SvPackage.imports`, `frontend/model.py`; `run.py` `new_pkg`), so woven code sees the user package's scope; golden `two_packages` updated; test `test_woven_package_repeats_user_imports`. 227 tests pass | in sv-weave 0.2.0 (`main`, 2026-11-12) |
 | fw-hdl | Bug found by `axi4_fv_ns`: the rv cores' `valid` (initiator) / `up_valid` (target, monitor) were registers cleared only at the first reset edge, so undefined in the first reset cycle (AXI A3.1.2 needs VALID low throughout reset). Now gated: `assign valid = valid_q & !reset` (`fw_rv_{initiator,target,monitor}_xtor_core.sv`). fw-hdl's own core proof (`tests/rv_proto/formal/fw_rv_cores_fv.sv`) held valid stable into a mid-run reset; its two hold properties now exempt cycles with reset high. `tests/rv_proto` 9/9; the full fw-hdl suite has 45 failures (mmio/regblock, xls, order), identical on a clean worktree of fw-hdl HEAD, so not from this work | done, uncommitted, branch `fw-proto-axi-new` |
-| sv-weave | `sv_weave_init.sv` declares `sv_weave_init_pkg`, so Verilator `-Wall` reports DECLFILENAME on it; waived by path in `lint-waivers-xtor.yaml` | to raise |
+| sv-weave | `sv_weave_init.sv` declares `sv_weave_init_pkg`, so Verilator `-Wall` reports DECLFILENAME on it; waived by path in `lint-waivers-xtor.yaml` | fixed in sv-weave 0.2.0 (`main`, 2026-11-12); workaround/waiver removed here |
 | Verilator 5.055 | Bug found: internal fault (V3Param "Expected module parameterization") on a virtual interface whose type parameter is a class-scoped type of a parameter (`virtual fw_rv_target_xtor_if #(ty #(P)::b_t)`). Worked around in the generated code: a local `typedef ty #(P)::b_t b_t;` first | to raise (Verilator) |
-| sv-weave | Gap found: two `svweave.Weave` tasks in one image both define `sv_weave_init_pkg`. Worked around by weaving the test sources in one run (`tests/weave/sv-weave.yaml`) | to raise |
+| sv-weave | Gap found: two `svweave.Weave` tasks in one image both define `sv_weave_init_pkg`. Worked around by weaving the test sources in one run (`tests/weave/sv-weave.yaml`) | fixed in sv-weave 0.2.0 (`main`, 2026-11-12); `init: false` + `svweave.Init`; the single run in `tests/weave` is kept (simpler) |
 | fw-hdl | rv transactor run-time `depth`/`max_gap`; monitor first-valid event (`up_first`/`up_xfer`, `get_ev`); `tests/rv_proto/rv_knobs_tb.sv`, `test_runtime_knobs` (`src/std/rv/fw_rv_{initiator,target,monitor}_xtor_if.sv`, `fw_rv_monitor_xtor{,_core}.sv`). Lint: the new state (`gap_left`, `drawn`) has no declaration initializer, so `-Wall` adds nothing to fw-hdl's existing PROCASSINIT warnings | done, uncommitted, branch `fw-proto-axi-new` |
 | fw-proto-axi (this) | `ivpm.yaml`: yosys (sby) declared directly (was only via fw-hdl) | done, uncommitted |
 | fw-proto-axi (this) | `ci/run.sh`: the separate `uv pip install -e packages/fw-hdl/python` step dropped; fw-hdl's `pyproject.toml` moved to its root and `ivpm update` now installs it (with the dfm plugin) (P8(d)) | done, uncommitted |
@@ -773,10 +772,10 @@ Decisions (2026-11-12):
 
 | Task | Deliverable | Status |
 |---|---|---|
-| Owed docs (§7) | `docs/core-spec.md`, `docs/derived-classes.md`, `docs/writing-a-protocol-package.md`, `docs/brief-answers.md` | written, uncommitted |
+| Owed docs (§7) | `docs/core-spec.md`, `docs/derived-classes.md`, `docs/writing-a-protocol-package.md`, `docs/brief-answers.md` | done (`bd8acb6`) |
 | Jinja feasibility | `docs/jinja-feasibility.md`, pilot `docs/jinja-pilot.patch` (not applied) | done: go with conditions, ~4 days |
-| sv-weave fix plan | `docs/upstream-sv-weave.md` | plan done; baseline 227 pass / 3 xfail |
-| fw-hdl test-failure plan | `docs/upstream-fw-hdl.md` | plan done; 64 failures in 8 groups (G1-G8) |
+| sv-weave fix plan | `docs/upstream-sv-weave.md` | done: A-D, gaps 2, 1, 3 and the 0.2.0 bump committed on `fw-proto-axi-new`, merged (ff) to sv-weave `main`; 243 pass / 3 xfail. Tag `v0.2.0` pending |
+| fw-hdl test-failure plan | `docs/upstream-fw-hdl.md` | done: F1-F3, X1-X4 (+ `eb37ce4` svunit lookup for formal) merged `--no-ff` to fw-hdl `main` `4b9a66a`, pushed. `tests/python` 291 pass / 2 skip; xls-conformance fails only G6 (16, needs E1); rv_proto 9/9. E1 not done: `wpk/results-ir` belongs to another packet |
 
 Notes (2026-11-12):
 - Brief found: `axi4-package-brief.md` (repo root), §10 Q1-Q4. Q1, Q3 settled; Q2 partly
@@ -803,4 +802,11 @@ Decided (2026-11-12): sv-weave goes to 0.2.0 (plugin range defaults move with it
 the sv-weave and fw-hdl work is committed on each `fw-proto-axi-new` branch, merged to that
 repo's `main` and pushed (the PR plans in the upstream docs become the commit order).
 
-Next: implement and merge the sv-weave plan, then the fw-hdl plan; re-run `ci/run.sh` here.
+Done (2026-11-12): sv-weave `main` `82681d5` and fw-hdl `main` `4b9a66a` pushed to Forgejo
+(both sync to GitHub every 5 min). `ci/run.sh` here passes against the new sv-weave.
+fw-hdl GitHub CI stays red on `xls-conformance` until E1 (dv-flow-libsynth `wpk/results-ir`)
+is merged by its packet. G8 (AES) runs only with `FW_HDL_RUN_BIGMEM=1`; G7 is a strict xfail.
+
+Next: tag sv-weave `v0.2.0` (releases; on request) and pin it here; fix the design-doc drift
+above; Jinja migration when wanted; E2 (zuspec-dataclasses `Arg.datatype`) and E3 (Verilator
+AES repro) outside fw-hdl.

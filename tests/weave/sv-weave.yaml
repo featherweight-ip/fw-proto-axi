@@ -1,5 +1,6 @@
-# The weave suite's own weave: the AXI4 core plus the synthetic API, in one run
-# (two Weave tasks in one image would both define sv_weave_init_pkg).
+# The weave suite's own weave: the AXI4 core plus the synthetic API, in one run.
+# One run is the simpler flow; two Weave tasks in one image would need init: false
+# on each and an svweave.Init after them (sv-weave 0.2).
 sv-weave:
   binding: fw_proto_weave:FwProtoBinding
   plugin-path: [../../fw_proto/python]

@@ -191,7 +191,8 @@ Copy `src/flow.yaml`:
 | `rules`, `rules-xtor` | `std.FileSet` | `woven` / `woven-xtor` | the rules package |
 
 An image uses `woven` or `woven-xtor`, never both: two weaves in one image both define
-`sv_weave_init_pkg`. That is why everything built on the woven package comes in two
+`sv_weave_init_pkg` (unless each sets `init: false` and an `svweave.Init` follows them,
+sv-weave 0.2). That is why everything built on the woven package comes in two
 forms.
 
 ### 4.3 What you get
@@ -320,10 +321,8 @@ Found while building AXI4 (plan §8). Each has a workaround in place.
 | Verilator | a `$cast` between a class and an interface class can fold to 0 (brief §8) | never `$cast` to an interface class; hold listeners as interface-class handles |
 | Verilator | `wire`, `release`, `join` are keywords | don't use them as method names |
 | slang (pyslang 12.1.0) | two packed structs with the same members are taken for one type in an interface's type parameter, so legal vif assignments fail | weave under an empty top (`xtor_weave_top.sv`); Verilator lints the wrappers |
-| sv-weave | the up-to-date check hashes the weaver's version string, not its source | delete `rundir/*woven*` after editing a weaver |
-| sv-weave | two `svweave.Weave` tasks in one image both define `sv_weave_init_pkg` | one weave per image (`woven` or `woven-xtor`); weave test sources in the same run |
+| sv-weave < 0.2 | two `svweave.Weave` tasks in one image both define `sv_weave_init_pkg` | one weave per image (`woven` or `woven-xtor`); weave test sources in the same run. 0.2: `init: false` on each plus `svweave.Init` |
 | sv-weave | members of an unspecialized class are not modelled; specialized types print resolved | one `#(<p>_param_t P = ...)` header everywhere; class-local typedefs in signatures |
-| sv-weave | `sv_weave_init.sv` gives Verilator a DECLFILENAME warning | waived by path (`lint-waivers-xtor.yaml`) |
 | fw-hdl | `fw_port` resolves during connect, child by child | build a wrapper before its users |
 | Yosys 0.70 | truncates unsized parameter values over 32 bits; `$error` in an initial `for` | the emitter writes sized values; `tests/ip/ip_checks.py` patches `$error` |
 | xezim 0.11.3 | wrong widths for a struct-valued class parameter | out of scope: Verilator only |

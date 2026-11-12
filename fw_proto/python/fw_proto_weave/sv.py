@@ -2,7 +2,7 @@
 import re
 from typing import List
 
-from sv_weave.frontend.decl import SvDeclArg, SvDeclMethod
+from sv_weave.api import SvDeclArg, SvDeclMethod
 
 _SIMPLE_TYPE = re.compile(r"^[A-Za-z_][\w$]*(::[A-Za-z_][\w$]*)*$")
 

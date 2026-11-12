@@ -11,7 +11,7 @@ import dataclasses as dc
 import re
 from typing import Dict, List, Optional
 
-from sv_weave.frontend.decl import SvDecl, SvDeclArg, SvDeclMember
+from sv_weave.api import SvDecl, SvDeclArg, SvDeclMember
 
 from .model import ATTR_API, ATTR_BUNDLE, Api, method
 from .sv import args_unused

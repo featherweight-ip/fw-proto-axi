@@ -1,6 +1,12 @@
 # sv-weave: upstreaming plan
 
-Status 2026-11-12. Plan only; nothing in `packages/sv-weave` is changed, committed or pushed.
+Status 2026-11-12: **implemented.** The PR list in §4 became the commit order on
+`fw-proto-axi-new` (A, B, C, D, gap 2, gap 1, gap 3, then `sv-weave 0.2.0`), merged
+fast-forward into sv-weave `main`. API 0.2, default plugin range `">=0.2,<0.3"`. Tag
+`v0.2.0` not yet made (it releases). Choices made in implementation: the Weave task's
+`init` param is a bool ANDed with the config's `init` (dv-flow has no tri-state param);
+`svweave.Init` errors on an upstream Weave that wrote its own init; a 0.1
+`sv_weave_init.sv` in the sources is also detected.
 Covers the sv-weave rows of [plan-new-style.md](plan-new-style.md) §8: the feature work
 already on the branch, and the three gaps to fix (§11: we fix and upstream them).
 

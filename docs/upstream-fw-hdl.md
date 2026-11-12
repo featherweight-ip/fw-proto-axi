@@ -1,6 +1,10 @@
 # fw-hdl: test failures and upstreaming plan
 
-Status 2026-11-12. Plan only; nothing in `packages/fw-hdl` is changed, committed or pushed.
+Status 2026-11-12: **done** except E1/E2/E3. F1-F3 and X1-X4 merged to fw-hdl `main`
+(`4b9a66a`, `--no-ff`) and pushed; one extra commit `eb37ce4` (formal: svunit found via
+`$SVUNIT_INSTALL` and the ivpm workspace, same cause as G3 in library code). Results:
+`tests/python` 291 pass / 2 skip, xls-conformance 16 fail (G6 only) / 483 pass, rv_proto 9/9.
+The plan below is kept as written.
 Covers the fw-hdl rows of [plan-new-style.md](plan-new-style.md) §8: the feature work on the
 branch, and the pre-existing test failures (§11: we fix and upstream them).
 

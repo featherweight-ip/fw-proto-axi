@@ -2,7 +2,7 @@
 for every method of an API, all void functions (design §4.1)."""
 from typing import List
 
-from sv_weave.frontend.decl import SvDeclArg
+from sv_weave.api import SvDeclArg
 
 from .model import ATTR_LISTENER, Api, method
 from .sv import RET, args_unused, as_inputs

@@ -186,7 +186,8 @@ def test_xtor_lint_wall(woven_xtor, tmp_path):
     top.write_text(XTOR_LINT_TOP % "\n  ".join(insts))
     files = (BASE + RV_SOURCES
              + [os.path.join(woven_xtor.out_dir, n) for n in woven_xtor.compile_order
-                if n.endswith(".sv") and n != "sv_weave_init.sv"] + [str(top)])
+                if n.endswith(".sv")
+                and n not in ("sv_weave_init_pkg.sv", "sv_weave_init_m.sv")] + [str(top)])
     # -Wno-fatal: fw-hdl's rv interfaces carry warnings of their own (PROCASSINIT).
     cmd = [_verilator(), "--lint-only", "-Wall", "-Wno-fatal", "--timing", "-Wno-UNUSEDPARAM",
            "-Wno-UNUSEDSIGNAL", "-Wno-UNDRIVEN", "-Wno-PINMISSING",
