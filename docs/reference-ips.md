@@ -62,7 +62,7 @@ The pin rules (fw-hdl `fw_extern_map`):
 | `.slot(k)` | the port is slot k of packed-vector pins (crossbars) |
 | `pin(pin, sp, field, msb, lsb, slot)` | one pin, or a slice of a field |
 | `tie(pin, value)` / `open(pin)` | a pin outside the bundle: an input held, an output left open |
-| `clock(pin)` / `reset(pin, .active_low(1))` | the component's clock and reset |
+| `clock(pin)` / `reset(pin, .active_low(1))` | the device's clock and reset pins, connected to the component's clock and reset domains (the root's: the emitter refuses any other, [design-domains.md](design-domains.md)). This is where a device's pin names and polarity live |
 
 The emitter fails if any bit of a field is unmapped or mapped twice, if a pin is mapped
 twice, or if a pin's slots are not 0..n-1. It writes parameter values wider than 32 bits

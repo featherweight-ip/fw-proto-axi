@@ -23,7 +23,6 @@ names a protocol. It is meant to move to fw-hdl (plan D2).
 | `(* fw_proto_bundle = "<proto>", fw_roles = "<a>,<b>" *)` | class | the port bundle; role `a` drives the fwd channels |
 | `(* fw_fwd *)`, `(* fw_rev *)` | bundle property `<family> #(<payload>) <ch>` | a channel and its direction |
 | `(* fw_opt = "<P member>" *)` | payload struct member | the field has pins only when `P.<member> != 0` |
-| `(* fw_clock = "<pin>", fw_reset_n = "<pin>" *)` (or `fw_reset`, active high) | bundle class | clock and reset pins of the generated transactors (default `clock`, `reset`) |
 | `(* fw_defs_pkg = "<pkg>" *)` | bundle class | the bundle's synthesizable (class-free) package, holding its parameter type; needed for the RTL layer and by `xtor` |
 
 ## What is derived (into `<pkg>_woven`)
@@ -44,8 +43,11 @@ For every bundle with `fw_defs_pkg`, into `<fw_defs_pkg>_woven` (class-free, syn
 - `<proto>_<payload>_bits(P)`, each payload struct's width.
 
 With the weaver option `xtor: true`, for every bundle with two roles and `fw_rv_ch`
-channels, the pin-level transactors (`python/fw_proto_weave/xtors.py`). They need
-fw-hdl's ready/valid kit (`fw-hdl.hdl.rv-src`) in the image:
+channels, the pin-level transactors (`python/fw_proto_weave/xtors.py`). Each has the pins
+`clock` and an active-high `reset`, from the domain of the component that holds it (clock
+and reset are domains, not bundle attributes: `fw_clock`, `fw_reset`, `fw_reset_n` are an
+error, see `docs/design-domains.md`). They need fw-hdl's ready/valid kit
+(`fw-hdl.hdl.rv-src`) in the image:
 - files beside the woven package, compiled after it, per role and one for the monitor
   (`mon`): `<proto>_<role>_xtor_core.sv`, the synthesizable core (one fw-hdl rv core per
   channel, the flat payloads spliced onto the pins, named as in the field table; imports

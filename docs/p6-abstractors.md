@@ -36,7 +36,7 @@ Kinds of component (all `fw_realized`, holding struct ports):
 | `connect(fw_export/fw_port)` on the struct port | generated per role: `connect(<role link>)`, inserting `<link>_abs` | woven-xtor |
 | one-way rv API (port or export) | the two-way role link: `fw_socket #(req, rsp)` for a manager, `fw_mirror #(req, rsp)` for a subordinate (fw-hdl's pair) | woven-xtor typedefs `axi4_mgr_socket`, `axi4_sub_socket` |
 | `tname()` = `logic [w-1:0]` | `#(.P(<n>'h<hex>))`: the struct port prints its own specialization (`param_lit()`, generated) | emitter + woven |
-| transactor `clock`/`reset` | the bundle's `fw_clock`/`fw_reset_n`: `.aclk(clock), .aresetn(!reset)` (string table) | woven |
+| transactor `clock`/`reset` | the boundary's domains (P11, [design-domains.md](design-domains.md)): every generated transactor has `clock` and an active-high `reset`; the emitter connects them to the sim top's root nets (`fw_emitter::clk_rst_nets()`) and refuses a boundary in any other domain | emitter |
 | `fw_rv_target_handle` (stall knob from config) | generated `axi4_<role>_abs_h`: an `fw_component` holding the xtor bridge and a proxy per direction; knobs from `fw_proto_cfg` at its path go to `chans.set_knob` | woven-xtor |
 
 ### The two-way link

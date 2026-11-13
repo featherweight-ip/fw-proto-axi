@@ -396,15 +396,17 @@ supported, with exactly two roles. The modules are files beside the woven packag
 | `<proto>_<role>_xtor_bridge` | class: the pins as the role's channel API (below) |
 
 Pin names are the field table's, and the protocol checker's, so `.*` connects.
-Optional fields keep their pins, `w1` wide, tied to 0. Clock and reset pins come from
-`fw_clock` and `fw_reset_n` (here `aclk`, `aresetn`).
+Optional fields keep their pins, `w1` wide, tied to 0. Clock and reset are `clock` and
+an active-high `reset`, from the domain of the component holding the transactor
+([design-domains.md](design-domains.md)); a bench with AXI pins connects
+`.clock(aclk), .reset(!aresetn)`.
 
 ```systemverilog
 module axi4_mgr_xtor_core
     import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_defs_pkg_woven::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) (
-    input  logic aclk,
-    input  logic aresetn,
+    input  logic clock,
+    input  logic reset,
     output logic awvalid,
     input  logic awready,
     output logic [w1(P.ID_W)-1:0] awid,
@@ -413,7 +415,7 @@ module axi4_mgr_xtor_core
     ...
 );
     ...
-    fw_rv_initiator_xtor_core #(.W(AW_BITS)) u_aw (.clock(aclk), .reset(!aresetn), ...);
+    fw_rv_initiator_xtor_core #(.W(AW_BITS)) u_aw (.clock(clock), .reset(reset), ...);
     assign awid = (P.ID_W != 0) ? aw_d[AW_ID_LSB +: (w1(P.ID_W))] : '0;
     assign awaddr = aw_d[AW_ADDR_LSB +: (P.ADDR_W)];
     ...
@@ -505,7 +507,7 @@ Use (`tests/ip/axi_ram/ram_api.svh`, `ram_top.svh`): `axi4_sub_socket #(P) s;` â
 The description-time abstractor, an `fw_boundary` implementing the API its role sends.
 `serve(socket)` makes it the endpoint's imp. Nothing runs through it: its methods wait on
 an event that never fires. Its string tables tell the emitter what to instantiate
-(`xtor_module()`, `vif_type()`, `handle_type()`, `xtor_clk_rst()`; `pin_sp()` is its
+(`xtor_module()`, `vif_type()`, `handle_type()`; `pin_sp()` is its
 `sp`, the struct port it links to the RTL). Inserted by `<role>_sp::connect()`; not used
 directly.
 

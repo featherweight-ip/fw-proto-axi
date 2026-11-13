@@ -139,8 +139,7 @@ not channel payloads and nothing is derived from them.
 ### The port bundle: `axi4_bundle #(P)`
 
 ```systemverilog
-(* fw_proto_bundle = "axi4", fw_roles = "mgr,sub", fw_clock = "aclk", fw_reset_n = "aresetn",
-   fw_defs_pkg = "fw_proto_axi4_defs_pkg" *)
+(* fw_proto_bundle = "axi4", fw_roles = "mgr,sub", fw_defs_pkg = "fw_proto_axi4_defs_pkg" *)
 class axi4_bundle #(axi4_param_t P = AXI4_PARAM_DEFAULT);
     typedef axi4_types #(P) t;
     (* fw_fwd *) fw_rv_ch #(t::aw_t) aw;
@@ -154,15 +153,20 @@ endclass
 The bundle is never instantiated. It is a declaration the weavers read: which channels
 the protocol has, which way each goes, and what each carries.
 
+Clock and reset are not bundle facts. They are domains ([design-domains.md](design-domains.md)):
+every generated transactor has the pins `clock` and an active-high `reset`, which the
+emitter connects to the domain of the component holding the transactor. A device's own
+names and polarity (`ACLK`, `ARESETn`) go in its pin map
+(`x.clock("ACLK"); x.reset("ARESETN", .active_low(1))`); a hand bench with AXI pins
+connects `.clock(aclk), .reset(!aresetn)`. The old attributes `fw_clock`, `fw_reset`
+and `fw_reset_n` are an error.
+
 Class attributes:
 
 | Attribute | Meaning | Default |
 |---|---|---|
 | `fw_proto_bundle = "<proto>"` | marks the bundle; `<proto>` prefixes every derived name | class name less `_bundle` |
 | `fw_roles = "<a>,<b>"` | the two roles; `<a>` sends the `fw_fwd` channels, `<b>` the `fw_rev` ones. `mon` is reserved | `init,targ` |
-| `fw_clock = "<pin>"` | clock pin of the transactor modules | `clock` |
-| `fw_reset_n = "<pin>"` | active-low reset pin; wins over `fw_reset` | none |
-| `fw_reset = "<pin>"` | active-high reset pin | `reset` |
 | `fw_defs_pkg = "<pkg>"` | the class-free package of the parameters; gets `<pkg>_woven`; needed for transactors | none |
 
 Channel members:

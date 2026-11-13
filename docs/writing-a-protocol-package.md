@@ -92,8 +92,7 @@ One parameterized class holding a packed struct per channel
 `src/core/axi4_bundle.svh`:
 
 ```systemverilog
-(* fw_proto_bundle = "axi4", fw_roles = "mgr,sub", fw_clock = "aclk", fw_reset_n = "aresetn",
-   fw_defs_pkg = "fw_proto_axi4_defs_pkg" *)
+(* fw_proto_bundle = "axi4", fw_roles = "mgr,sub", fw_defs_pkg = "fw_proto_axi4_defs_pkg" *)
 class axi4_bundle #(axi4_param_t P = AXI4_PARAM_DEFAULT);
     typedef axi4_types #(P) t;
     (* fw_fwd *) fw_rv_ch #(t::aw_t) aw;
@@ -109,11 +108,15 @@ endclass
 | `fw_proto_bundle = "<p>"` | the bundle; `<p>` prefixes every derived name |
 | `fw_roles = "<a>,<b>"` | the two roles; `<a>` drives the `fw_fwd` channels. Not `mon` (the generated monitor's name) |
 | `fw_fwd` / `fw_rev` | a channel and its direction relative to role `<a>` |
-| `fw_clock`, `fw_reset_n` (or `fw_reset`) | the transactors' clock and reset pins |
 | `fw_defs_pkg` | the class-free package holding `<p>_param_t`; needed for the RTL cores and `xtor` |
 
 Cross-channel facts (AXI4: `len`+1 W beats per AW, B after the last W) do not go in
 the bundle. They are rules (step 7).
+
+Clock and reset do not go in the bundle either. They are domains
+([design-domains.md](design-domains.md)): every generated transactor takes `clock` and an
+active-high `reset` from the domain of the component that holds it, and a device's pin
+names and polarity go in its pin map.
 
 For AXI4-Lite: five channels, payloads `addr`+`prot`, `data`+`strb`, `resp`; no ID, no
 `len`, no `last`. Give it its own bundle. Don't model it as AXI4 with absent fields:

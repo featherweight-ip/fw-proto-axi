@@ -217,6 +217,13 @@ again after the retraction: a retraction becomes an event only when VALID comes 
 8. **Reset and X are not events.** VALID low during reset (A3.1.2) and no X on controls
    cannot be stated over pre/post. They stay with the pin checker, or with the rv
    family as properties on the struct port.
+   Since P11 ([design-domains.md](design-domains.md)) the reset is nameable: a
+   transactor's `reset` comes from its component's reset domain, so a pin rule can be
+   stated against "the domain's reset" rather than a bundle pin. The class model still
+   does not exist during the root reset, so the domain does not make it a call event.
+   The follow-up (design §10, H5, not done): a monitor event `<ch>_valid_in_reset()`
+   raised by the monitor core when `valid && reset`, and an immediate rule
+   `valid_in_reset` on it.
 9. **A VALID retraction must be reported as an event.** fw-hdl's rv monitor used to keep
    a transfer pending through a drop of VALID, so a retraction with the payload
    unchanged produced no event. It now clears the pending mark (plan §8), and the next
