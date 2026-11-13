@@ -36,7 +36,7 @@ module rules_pins_unit_test;
     logic        awuser, wuser, buser, aruser, ruser;
 
     axi4_checker #(.P(P), .MAX_OUT(4), .COUNT_ONLY(1)) u_chk (.*);
-    axi4_mon_xtor #(P) u_mon (.*);
+    axi4_mon_xtor #(P) u_mon (.clock(aclk), .reset(!aresetn), .*);
     axi4_mon_xtor_bridge #(P) monb;
     axi4_rules #(P) rules;
 

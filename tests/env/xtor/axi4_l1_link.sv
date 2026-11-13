@@ -180,8 +180,8 @@ module axi4_l1_seg_a
     input  logic [RB_-1:0]  a_r_data
 );
     `AXI4_L1_PINS
-    axi4_mgr_xtor #(P) u_mgr (.*);
-    axi4_mon_xtor #(P) u_mon (.*);
+    axi4_mgr_xtor #(P) u_mgr (.clock(aclk), .reset(!aresetn), .*);
+    axi4_mon_xtor #(P) u_mon (.clock(aclk), .reset(!aresetn), .*);
     axi4_checker #(.P(P), .MAX_OUT(32), .COUNT_ONLY(1)) u_chk (.*);
 
     assign a_aw_valid = awvalid;  assign awready = a_aw_ready;  assign a_aw_data = `AXI4_L1_AW;
@@ -213,7 +213,7 @@ module axi4_l1_seg_b
 );
     `AXI4_L1_PINS
     axi4_checker #(.P(P), .MAX_OUT(32), .COUNT_ONLY(1)) u_chk (.*);
-    axi4_sub_xtor #(P) u_sub (.*);
+    axi4_sub_xtor #(P) u_sub (.clock(aclk), .reset(!aresetn), .*);
 
     assign awvalid = b_aw_valid;  assign b_aw_ready = awready;  assign `AXI4_L1_AW = b_aw_data;
     assign wvalid  = b_w_valid;   assign b_w_ready  = wready;   assign `AXI4_L1_W  = b_w_data;

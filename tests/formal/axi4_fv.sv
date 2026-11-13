@@ -70,6 +70,7 @@ module axi4_fv
     logic [P.DATA_W-1:0] wdata, rdata;
 
     axi4_mgr_xtor_core #(P) u_mgr (
+        .clock(aclk), .reset(!aresetn),
         .aw_up_valid(m_aw_valid), .aw_up_ready(m_aw_ready), .aw_up_data(m_aw_data),
         .w_up_valid(m_w_valid),   .w_up_ready(m_w_ready),   .w_up_data(m_w_data),
         .b_up_valid(m_b_valid),   .b_up_ready(m_b_ready),   .b_up_data(m_b_data),
@@ -78,6 +79,7 @@ module axi4_fv
         .*);
 
     axi4_sub_xtor_core #(P) u_sub (
+        .clock(aclk), .reset(!aresetn),
         .aw_up_valid(s_aw_valid), .aw_up_ready(s_aw_ready), .aw_up_data(s_aw_data),
         .w_up_valid(s_w_valid),   .w_up_ready(s_w_ready),   .w_up_data(s_w_data),
         .b_up_valid(s_b_valid),   .b_up_ready(s_b_ready),   .b_up_data(s_b_data),

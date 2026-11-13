@@ -56,9 +56,9 @@ module axi4_xtor_b2b
     logic [1:0] rresp;
     logic [RUW_-1:0] ruser;
 
-    axi4_mgr_xtor #(P) u_mgr (.*);
-    axi4_sub_xtor #(P) u_sub (.*);
-    axi4_mon_xtor #(P) u_mon (.*);
+    axi4_mgr_xtor #(P) u_mgr (.clock(aclk), .reset(!aresetn), .*);
+    axi4_sub_xtor #(P) u_sub (.clock(aclk), .reset(!aresetn), .*);
+    axi4_mon_xtor #(P) u_mon (.clock(aclk), .reset(!aresetn), .*);
     axi4_checker #(.P(P), .COUNT_ONLY(1)) u_chk (.*);
 
     // Monitor listeners: what the pins carried, pre (first valid) and post (handshake).

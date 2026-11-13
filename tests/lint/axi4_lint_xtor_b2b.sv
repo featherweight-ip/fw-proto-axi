@@ -28,9 +28,9 @@ module axi4_lint_xtor_b2b
     logic [DW_-1:0]   wdata, rdata;
     logic [DW_/8-1:0] wstrb;
 
-    axi4_mgr_xtor #(P) u_mgr (.*);
-    axi4_sub_xtor #(P) u_sub (.*);
-    axi4_mon_xtor #(P) u_mon (.*);
+    axi4_mgr_xtor #(P) u_mgr (.clock(aclk), .reset(!aresetn), .*);
+    axi4_sub_xtor #(P) u_sub (.clock(aclk), .reset(!aresetn), .*);
+    axi4_mon_xtor #(P) u_mon (.clock(aclk), .reset(!aresetn), .*);
 
     axi4_rsp_if_inbox #(P)    m_in = new;
     axi4_req_if_inbox #(P)    s_in = new;
