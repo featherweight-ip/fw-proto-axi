@@ -19,6 +19,7 @@ be able to resume from this file alone.
 | P7 Rules in simulation | done (regression below) | rule library in `fw_proto/src`, nine AXI4 rules in `src/rules`; on every L1/L2/b2b link and every IP abstractor (by path); `rules_teeth` 17/17 both views, `rules_pins` 13/13 (agrees with `axi4_checker`). See [rules.md](rules.md) |
 | P8 Retire the old package | done | old package, cores and suites deleted; `_ns` names dropped; `ci/run.sh` from a clean bootstrap passes (lint-rtl, tests 14/14, fv-cover, fv-prove, fv-teeth). §5 P8 |
 | P9 Docs, Jinja assessment, upstream fixes | in progress | §11 |
+| P10 Weaver text into Jinja templates | in progress | §12 |
 | Later: formal generation (A4), monitor transactions (A5), systems (A6) | not planned in detail | §9 |
 
 **Last update:** 2026-11-12 (P8 committed and pushed, `e71d2b5`; P9 started, §11). Names: the dated notes from P2 to
@@ -810,3 +811,22 @@ is merged by its packet. G8 (AES) runs only with `FW_HDL_RUN_BIGMEM=1`; G7 is a 
 Next: tag sv-weave `v0.2.0` (releases; on request) and pin it here; fix the design-doc drift
 above; Jinja migration when wanted; E2 (zuspec-dataclasses `Arg.datatype`) and E3 (Verilator
 AES repro) outside fw-hdl.
+
+## 12. P10: weaver text into Jinja templates (started 2026-11-13)
+
+From `jinja-feasibility.md` §7 (go with conditions). Rules: sv-weave owns `render()` and
+the line map (weavers never import jinja2); templates hold only `for`/`if`/substitution,
+lists and expressions are built in Python views; each step leaves every golden unchanged
+(goldens are never regenerated in a migration step). Steps 1-5 now; 6-7 only if the
+assessment after step 5 says the small weavers read better as templates.
+
+| Step | What | Status |
+|---|---|---|
+| 1 | Gap goldens: `tests/weave/rv` config; synthetic bundle (active-high `fw_reset`, no struct param, an `fw_opt` member) || done: `fw_rv_pkg_woven.sv` golden + lint; `fw_proto_axi4_core_pkg_woven_xtor.sv` (added in step 4); `synb` bundle (no struct param, `fw_reset`, `fw_opt` expr) in the woven run; `synx` bundle (struct param, `fw_reset`) in the xtor run: 9 xtor + 2 pkg goldens; Verilator/sv2v cover both. 31 passed |
+| 2 | sv-weave `render()` + `SvText`, fragment-level origin (template file, line 1), jinja2 as an optional extra || done (sv-weave, uncommitted): `weave/templates.py` (`render`, `SvText` = str subclass, env per template dir, errors name template line); `Origin.py_file/py_line`; `templates` extra; fingerprint covers `.j2`; docs `authoring/weavers.rst` + CHANGELOG Unreleased. sv-weave 252 passed 3 xfailed; fw_proto 31 passed |
+| 3 | `xtors.py` on templates (pilot `docs/jinja-pilot.patch`, cleaned up) || done: 6 templates in `fw_proto_weave/templates/xtors/` (156 lines); `xtors.py` 430 -> 324 (views build every list, templates use `join`; `_typedefs` gone); render fns take `d`; `jinja2` in ivpm.yaml. fw_proto 31 passed, sv-weave 252/3 xfailed, ci/run.sh pass, `dfm run ip` pass |
+| 4 | `abs.py` on templates || done: 4 templates in `templates/abs/` (132 lines); `abs.py` 284 -> 167 (`AbsView`, `ObserversView`; `connect_method` stays Python until `ports.py`). Added gap golden `fw_proto_axi4_core_pkg_woven_xtor.sv` (the xtor run's AXI4 pkg: bridges + abs glue had no golden), made with the step-1 string weavers, folded into the step-1 patch. fw_proto 32 passed, sv-weave 252/3 xfailed, ci/run.sh pass, `dfm run ip` pass |
+| 5 | sv-weave per-line sub-spans; `verify` diagnostics name template lines || done (sv-weave): `SvText.tlines` from a generator walk + debug info, static chunks placed by the template's `TemplateData` nodes; `SvFragment.spans()` on normalized text; `Emitter.frag` one span per run. All 1778 template-mapped non-blank lines of the xtor run map to the right template line. Planted errors (scratch copy) report `role_bridge.sv.j2:30`, `core.sv.j2:17`. sv-weave 255 passed 3 xfailed; fw_proto 32; ci/run.sh, `dfm run ip` pass |
+| — | Assessment: do 6-7 or stop || done (`jinja-feasibility.md` §8): step 6 for `ports.py` + `endpoints.py` only; leave `proxies.py`; skip step 7 |
+| 6 | `ports.py`, `endpoints.py`, `proxies.py` | |
+| 7 | `bases.py`, `listeners.py`, `imps.py` | |
