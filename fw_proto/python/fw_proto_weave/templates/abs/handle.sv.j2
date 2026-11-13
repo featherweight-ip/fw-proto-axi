@@ -1,0 +1,38 @@
+// Run time: the abstractor {{ v.abs }}, as a component. Calls made on the
+// endpoint go through {{ v.s_var }} to the pins ({{ v.bridge }}); what the pins receive goes
+// through {{ v.r_var }} to the endpoint's peer. Listeners attach to {{ v.s_var }} and {{ v.r_var }}.
+// Knobs set for its path in fw_proto_cfg ("<ch>.depth", "<ch>.max_gap")
+// reach the channel transactors when it starts. Listeners registered for its
+// path ({{ v.observers }}) are added to its proxies.
+class {{ v.handle }} {{ v.header }} extends fw_component implements fw_runnable;
+    {{ v.bridge_spec }} bridge;
+    {{ v.s_proxy_spec }} {{ v.s_var }};
+    {{ v.r_proxy_spec }} {{ v.r_var }};
+    {{ v.peer_socket_spec }} m_ep;
+
+    function new(string name, fw_component parent, {{ v.vif }} vif);
+        super.new(name, parent);
+        {{ v.r_var }} = new();
+        bridge = new(vif, {{ v.r_var }});
+        {{ v.s_var }} = new(bridge);
+        {{ v.observers_spec }}::attach(fw_rel_path(this), {{ v.rq }}, {{ v.rs }});
+        parent.add_runnable(this);
+    endfunction
+
+    function void serve({{ v.peer_socket_spec }} ep);
+        m_ep = ep;
+        ep.set_imp({{ v.s_var }});
+    endfunction
+
+    virtual task run();
+        string path = fw_rel_path(this);
+        string names[$];
+        {{ v.r_var }}.m_target = m_ep.t;
+        wait (bridge.vif.bound);
+        fw_proto_cfg::names(path, names);
+        foreach (names[i])
+            if (!bridge.vif.chans.set_knob(names[i], fw_proto_cfg::get_int(path, names[i], 0)))
+                $error("%s: no knob '%s'", path, names[i]);
+        bridge.run();
+    endtask
+endclass

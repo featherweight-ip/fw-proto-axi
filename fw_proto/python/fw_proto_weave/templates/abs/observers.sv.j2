@@ -1,0 +1,44 @@
+// Listeners attached by path to the abstractor handles of this P. A test
+// registers listeners for a path (add; either may be null); each handle
+// registers its proxies under its path when it is built (attach). Whichever
+// comes second joins them, so the order does not matter as long as both come
+// before the traffic. unused() names the listener paths no handle took (a
+// misspelled path, another P).
+class {{ o.name }} {{ o.header }};
+    static string m_path[$];
+    static {{ o.lreq }} m_{{ o.rq }}[$];
+    static {{ o.lrsp }} m_{{ o.rs }}[$];
+    static bit m_used[$];
+    static string m_h_path[$];
+    static {{ o.preq }} m_h_{{ o.rq }}[$];
+    static {{ o.prsp }} m_h_{{ o.rs }}[$];
+
+    static function void pair(int unsigned i, {{ o.preq }} {{ o.rq }}, {{ o.prsp }} {{ o.rs }});
+        if (m_{{ o.rq }}[i] != null) {{ o.rq }}.add_listener(m_{{ o.rq }}[i]);
+        if (m_{{ o.rs }}[i] != null) {{ o.rs }}.add_listener(m_{{ o.rs }}[i]);
+        m_used[i] = 1;
+    endfunction
+
+    static function void add(string path, {{ o.lreq }} {{ o.rq }}, {{ o.lrsp }} {{ o.rs }});
+        m_path.push_back(path);
+        m_{{ o.rq }}.push_back({{ o.rq }});
+        m_{{ o.rs }}.push_back({{ o.rs }});
+        m_used.push_back(0);
+        foreach (m_h_path[h]) if (m_h_path[h] == path)
+            pair(m_path.size() - 1, m_h_{{ o.rq }}[h], m_h_{{ o.rs }}[h]);
+    endfunction
+
+    static function void attach(string path, {{ o.preq }} {{ o.rq }}, {{ o.prsp }} {{ o.rs }});
+        m_h_path.push_back(path);
+        m_h_{{ o.rq }}.push_back({{ o.rq }});
+        m_h_{{ o.rs }}.push_back({{ o.rs }});
+        foreach (m_path[i]) if (m_path[i] == path) pair(i, {{ o.rq }}, {{ o.rs }});
+    endfunction
+
+    // The listener paths no handle has taken, comma-separated; "" if none.
+    static function string unused();
+        string s;
+        foreach (m_path[i]) if (!m_used[i]) s = {s, (s == "") ? "" : ", ", m_path[i]};
+        return s;
+    endfunction
+endclass

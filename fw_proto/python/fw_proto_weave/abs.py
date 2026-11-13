@@ -26,11 +26,13 @@ class description put RTL behind the bundle's APIs. Emitted with the transactors
 
 The abstractor's role is the opposite of the RTL port's: an RTL subordinate port
 is driven by a manager abstractor, which serves the wrapper's subordinate socket.
+
+The SV text is in ``templates/abs/``; here are the names and the view objects the
+templates read. connect() stays Python text until ports.py moves to templates.
 """
 from typing import List
 
 from .bundle import Bundle
-from .sv import args_unused
 from .xtors import _clock_reset, api_names, xtor_name
 
 
@@ -72,190 +74,71 @@ def check(b: Bundle, err) -> bool:
     return True
 
 
-def render_socket(b: Bundle, role: str) -> str:
-    req, rsp = api_names(b)
-    first = role == b.roles[0]
-    base = "fw_socket" if first else "fw_mirror"
-    provides = rsp if first else req
-    calls = req if first else rsp
-    name = socket_name(b, role)
-    return "\n".join([
-        "// The %s's API endpoint on a component: calls %s, provides %s. Its peer"
-        % (role, calls, provides),
-        "// is the %s's (connect()); connect_up() exposes it one level out."
-        % _other(b, role),
-        "class %s %s extends %s #(%s, %s);"
-        % (name, b.header, base, b.spec(req), b.spec(rsp)),
-        "    function new(string name, fw_component parent, %s imp = null);"
-        % b.spec(provides),
-        "        super.new(name, parent, imp);",
-        "    endfunction",
-        "endclass"])
+class AbsView:
+    """What the abs/ templates read for one role of a bundle."""
+
+    def __init__(self, b: Bundle, role: str):
+        req, rsp = api_names(b)
+        first = role == b.roles[0]
+        self.role, self.other = role, _other(b, role)
+        self.header = b.header
+        self.req_spec, self.rsp_spec = b.spec(req), b.spec(rsp)
+        # socket: the first role's is an fw_socket (calls req, provides rsp), the
+        # second's its fw_mirror
+        self.socket = socket_name(b, role)
+        self.socket_base = "fw_socket" if first else "fw_mirror"
+        self.calls, self.provides = (req, rsp) if first else (rsp, req)
+        self.provides_spec = b.spec(self.provides)
+        # abs and its handle
+        self.sends, recvs = _apis(b, role)
+        self.sends_spec = b.spec(self.sends)
+        self.abs, self.handle = abs_name(b, role), handle_name(b, role)
+        self.xtor = xtor_name(b, role)
+        self.other_sp = "%s_%s_sp" % (b.proto, self.other)
+        self.sp_spec = b.spec("%s_%s_sp" % (b.proto, role))
+        self.peer_socket_spec = b.spec(socket_name(b, self.other))
+        self.send_chans = [c for c in b.channels if c.fwd == first]
+        clk, rst, _ = _clock_reset(b)
+        self.clk_rst = ".%s(clock), .%s(%sreset)" % (clk, rst, "!" if b.reset_n else "")
+        self.s_var, self.r_var = _api_var(b, self.sends), _api_var(b, recvs)    # req / rsp
+        self.bridge = xtor_name(b, role) + "_bridge"
+        self.bridge_spec = b.spec(self.bridge)
+        self.s_proxy_spec = b.spec(self.sends + "_proxy")
+        self.r_proxy_spec = b.spec(recvs + "_proxy")
+        self.vif = "virtual %s_if %s" % (self.xtor, b.params_ref)
+        self.observers = observers_name(b)
+        self.observers_spec = b.spec(self.observers)
+        self.rq, self.rs = _api_var(b, req), _api_var(b, rsp)
 
 
-def render_abs(b: Bundle, role: str) -> str:
+class ObserversView:
+    """What abs/observers.sv.j2 reads."""
+
+    def __init__(self, b: Bundle):
+        req, rsp = api_names(b)
+        self.name, self.header = observers_name(b), b.header
+        self.rq, self.rs = _api_var(b, req), _api_var(b, rsp)
+        self.lreq, self.lrsp = b.spec(req + "_listener"), b.spec(rsp + "_listener")
+        self.preq, self.prsp = b.spec(req + "_proxy"), b.spec(rsp + "_proxy")
+
+
+def render_socket(d, b: Bundle, role: str) -> str:
+    return d.render("abs/socket.sv.j2", v=AbsView(b, role))
+
+
+def render_abs(d, b: Bundle, role: str) -> str:
     """The description object whose pins play ``role``."""
-    name = abs_name(b, role)
-    other = _other(b, role)
-    sends, _ = _apis(b, role)
-    sp = "%s_%s_sp" % (b.proto, role)
-    clk, rst, _ = _clock_reset(b)
-    clk_rst = (".%s(clock), .%s(!reset)" % (clk, rst) if b.reset_n
-               else ".%s(clock), .%s(reset)" % (clk, rst))
-    chans = [c for c in b.channels if c.fwd == (role == b.roles[0])]
-    out = ["// Description of an abstractor whose pins play %s (%s): it stands"
-           % (role, xtor_name(b, role)),
-           "// behind a %s endpoint and drives an RTL %s port. Inserted by"
-           % (other, other),
-           "// %s_%s_sp::connect(). Nothing runs through it: in the description its"
-           % (b.proto, other),
-           "// %s methods never return; at run time %s replaces it."
-           % (sends, handle_name(b, role)),
-           "class %s %s extends fw_boundary implements %s;"
-           % (name, b.header, b.spec(sends))]
-    for c in chans:
-        out.append("    typedef %s::%s %s;" % (b.spec(sends), c.payload_name, c.payload_name))
-    out += ["    %s sp;" % b.spec(sp),
-            "    /* verilator lint_off UNDRIVEN */      // never triggered, by design",
-            "    event m_never;",
-            "    /* verilator lint_on UNDRIVEN */",
-            "",
-            "    function new(string name, fw_component parent);",
-            "        super.new(name, parent);",
-            '        sp = new("sp", this);',
-            "    endfunction",
-            "",
-            "    // Stand behind the parent's endpoint.",
-            "    function void serve(%s ep);" % b.spec(socket_name(b, other)),
-            "        ep.set_imp(this);",
-            "        m_serves = ep.get_name();",
-            "    endfunction"]
-    for c in chans:
-        out += ["",
-                "    virtual task %s(input %s t);" % (c.name, c.payload_name),
-                "        @m_never;",
-                "    endtask"]
-    out += ["",
-            "    virtual function fw_sp_base pin_sp(); return sp; endfunction",
-            '    virtual function string xtor_module(); return "%s"; endfunction'
-            % xtor_name(b, role),
-            "    virtual function string vif_type();",
-            '        return {"virtual %s_if #(", sp.param_lit(), ")"};' % xtor_name(b, role),
-            "    endfunction",
-            "    virtual function string handle_type();",
-            '        return {"%s #(", sp.param_lit(), ")"};' % handle_name(b, role),
-            "    endfunction",
-            '    virtual function string xtor_clk_rst(); return "%s"; endfunction' % clk_rst,
-            "endclass"]
-    return args_unused("\n".join(out))
+    return d.render("abs/abs.sv.j2", v=AbsView(b, role))
 
 
-def render_observers(b: Bundle) -> str:
+def render_observers(d, b: Bundle) -> str:
     """The registry that joins listeners registered by path to the handles."""
-    name = observers_name(b)
-    req, rsp = api_names(b)
-    rq, rs = _api_var(b, req), _api_var(b, rsp)
-    lreq, lrsp = b.spec(req + "_listener"), b.spec(rsp + "_listener")
-    preq, prsp = b.spec(req + "_proxy"), b.spec(rsp + "_proxy")
-    return "\n".join([
-        "// Listeners attached by path to the abstractor handles of this P. A test",
-        "// registers listeners for a path (add; either may be null); each handle",
-        "// registers its proxies under its path when it is built (attach). Whichever",
-        "// comes second joins them, so the order does not matter as long as both come",
-        "// before the traffic. unused() names the listener paths no handle took (a",
-        "// misspelled path, another P).",
-        "class %s %s;" % (name, b.header),
-        "    static string m_path[$];",
-        "    static %s m_%s[$];" % (lreq, rq),
-        "    static %s m_%s[$];" % (lrsp, rs),
-        "    static bit m_used[$];",
-        "    static string m_h_path[$];",
-        "    static %s m_h_%s[$];" % (preq, rq),
-        "    static %s m_h_%s[$];" % (prsp, rs),
-        "",
-        "    static function void pair(int unsigned i, %s %s, %s %s);" % (preq, rq, prsp, rs),
-        "        if (m_%s[i] != null) %s.add_listener(m_%s[i]);" % (rq, rq, rq),
-        "        if (m_%s[i] != null) %s.add_listener(m_%s[i]);" % (rs, rs, rs),
-        "        m_used[i] = 1;",
-        "    endfunction",
-        "",
-        "    static function void add(string path, %s %s, %s %s);" % (lreq, rq, lrsp, rs),
-        "        m_path.push_back(path);",
-        "        m_%s.push_back(%s);" % (rq, rq),
-        "        m_%s.push_back(%s);" % (rs, rs),
-        "        m_used.push_back(0);",
-        "        foreach (m_h_path[h]) if (m_h_path[h] == path)",
-        "            pair(m_path.size() - 1, m_h_%s[h], m_h_%s[h]);" % (rq, rs),
-        "    endfunction",
-        "",
-        "    static function void attach(string path, %s %s, %s %s);" % (preq, rq, prsp, rs),
-        "        m_h_path.push_back(path);",
-        "        m_h_%s.push_back(%s);" % (rq, rq),
-        "        m_h_%s.push_back(%s);" % (rs, rs),
-        "        foreach (m_path[i]) if (m_path[i] == path) pair(i, %s, %s);" % (rq, rs),
-        "    endfunction",
-        "",
-        "    // The listener paths no handle has taken, comma-separated; \"\" if none.",
-        "    static function string unused();",
-        "        string s;",
-        "        foreach (m_path[i]) if (!m_used[i]) s = {s, (s == \"\") ? \"\" : \", \", m_path[i]};",
-        "        return s;",
-        "    endfunction",
-        "endclass"])
+    return d.render("abs/observers.sv.j2", o=ObserversView(b))
 
 
-def render_handle(b: Bundle, role: str) -> str:
+def render_handle(d, b: Bundle, role: str) -> str:
     """The run-time handle of ``render_abs``."""
-    name = handle_name(b, role)
-    other = _other(b, role)
-    sends, recvs = _apis(b, role)
-    s_var, r_var = sends[len(b.proto) + 1:-3], recvs[len(b.proto) + 1:-3]   # req / rsp
-    bridge = xtor_name(b, role) + "_bridge"
-    vif = "virtual %s_if %s" % (xtor_name(b, role), b.params_ref)
-    return "\n".join([
-        "// Run time: the abstractor %s, as a component. Calls made on the"
-        % abs_name(b, role),
-        "// endpoint go through %s to the pins (%s); what the pins receive goes"
-        % (s_var, bridge),
-        "// through %s to the endpoint's peer. Listeners attach to %s and %s."
-        % (r_var, s_var, r_var),
-        "// Knobs set for its path in fw_proto_cfg (\"<ch>.depth\", \"<ch>.max_gap\")",
-        "// reach the channel transactors when it starts. Listeners registered for its",
-        "// path (%s) are added to its proxies." % observers_name(b),
-        "class %s %s extends fw_component implements fw_runnable;" % (name, b.header),
-        "    %s bridge;" % b.spec(bridge),
-        "    %s %s;" % (b.spec(sends + "_proxy"), s_var),
-        "    %s %s;" % (b.spec(recvs + "_proxy"), r_var),
-        "    %s m_ep;" % b.spec(socket_name(b, other)),
-        "",
-        "    function new(string name, fw_component parent, %s vif);" % vif,
-        "        super.new(name, parent);",
-        "        %s = new();" % r_var,
-        "        bridge = new(vif, %s);" % r_var,
-        "        %s = new(bridge);" % s_var,
-        "        %s::attach(fw_rel_path(this), %s, %s);" % (b.spec(observers_name(b)),
-                                                      _api_var(b, api_names(b)[0]),
-                                                      _api_var(b, api_names(b)[1])),
-        "        parent.add_runnable(this);",
-        "    endfunction",
-        "",
-        "    function void serve(%s ep);" % b.spec(socket_name(b, other)),
-        "        m_ep = ep;",
-        "        ep.set_imp(%s);" % s_var,
-        "    endfunction",
-        "",
-        "    virtual task run();",
-        "        string path = fw_rel_path(this);",
-        "        string names[$];",
-        "        %s.m_target = m_ep.t;" % r_var,
-        "        wait (bridge.vif.bound);",
-        "        fw_proto_cfg::names(path, names);",
-        "        foreach (names[i])",
-        "            if (!bridge.vif.chans.set_knob(names[i], fw_proto_cfg::get_int(path, names[i], 0)))",
-        '                $error("%s: no knob \'%s\'", path, names[i]);',
-        "        bridge.run();",
-        "    endtask",
-        "endclass"])
+    return d.render("abs/handle.sv.j2", v=AbsView(b, role))
 
 
 def connect_method(b: Bundle, role: str) -> List[str]:
@@ -276,9 +159,9 @@ def connect_method(b: Bundle, role: str) -> List[str]:
             "    endfunction"]
 
 
-def render(b: Bundle) -> List[str]:
+def render(d, b: Bundle) -> List[str]:
     """Package items, after the bridges: sockets, abstractors, handles."""
-    return ([render_socket(b, r) for r in b.roles]
-            + [render_observers(b)]
-            + [render_abs(b, r) for r in b.roles]
-            + [render_handle(b, r) for r in b.roles])
+    return ([render_socket(d, b, r) for r in b.roles]
+            + [render_observers(d, b)]
+            + [render_abs(d, b, r) for r in b.roles]
+            + [render_handle(d, b, r) for r in b.roles])

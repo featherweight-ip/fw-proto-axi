@@ -127,7 +127,7 @@ class FwProtoWeaver(Weaver):
                     continue
                 for text in xtors.render_bridges(d, b):
                     d.add_item(pkg, text)
-                for text in abs_.render(b):
+                for text in abs_.render(d, b):
                     d.add_item(pkg, text, imports=["fw_hdl_pkg", RUNTIME_PKG])
                 for name, text in xtors.render_files(d, b, pkg):
                     d.add_file(name, text)

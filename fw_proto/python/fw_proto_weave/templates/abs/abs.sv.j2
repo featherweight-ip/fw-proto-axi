@@ -1,0 +1,43 @@
+{# The description object: its methods never read their arguments. #}
+/* verilator lint_off UNUSEDSIGNAL */
+// Description of an abstractor whose pins play {{ v.role }} ({{ v.xtor }}): it stands
+// behind a {{ v.other }} endpoint and drives an RTL {{ v.other }} port. Inserted by
+// {{ v.other_sp }}::connect(). Nothing runs through it: in the description its
+// {{ v.sends }} methods never return; at run time {{ v.handle }} replaces it.
+class {{ v.abs }} {{ v.header }} extends fw_boundary implements {{ v.sends_spec }};
+{% for c in v.send_chans %}
+    typedef {{ v.sends_spec }}::{{ c.payload_name }} {{ c.payload_name }};
+{% endfor %}
+    {{ v.sp_spec }} sp;
+    /* verilator lint_off UNDRIVEN */      // never triggered, by design
+    event m_never;
+    /* verilator lint_on UNDRIVEN */
+
+    function new(string name, fw_component parent);
+        super.new(name, parent);
+        sp = new("sp", this);
+    endfunction
+
+    // Stand behind the parent's endpoint.
+    function void serve({{ v.peer_socket_spec }} ep);
+        ep.set_imp(this);
+        m_serves = ep.get_name();
+    endfunction
+{% for c in v.send_chans %}
+
+    virtual task {{ c.name }}(input {{ c.payload_name }} t);
+        @m_never;
+    endtask
+{% endfor %}
+
+    virtual function fw_sp_base pin_sp(); return sp; endfunction
+    virtual function string xtor_module(); return "{{ v.xtor }}"; endfunction
+    virtual function string vif_type();
+        return {"virtual {{ v.xtor }}_if #(", sp.param_lit(), ")"};
+    endfunction
+    virtual function string handle_type();
+        return {"{{ v.handle }} #(", sp.param_lit(), ")"};
+    endfunction
+    virtual function string xtor_clk_rst(); return "{{ v.clk_rst }}"; endfunction
+endclass
+/* verilator lint_on UNUSEDSIGNAL */

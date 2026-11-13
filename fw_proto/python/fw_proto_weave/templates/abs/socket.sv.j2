@@ -1,0 +1,7 @@
+// The {{ v.role }}'s API endpoint on a component: calls {{ v.calls }}, provides {{ v.provides }}. Its peer
+// is the {{ v.other }}'s (connect()); connect_up() exposes it one level out.
+class {{ v.socket }} {{ v.header }} extends {{ v.socket_base }} #({{ v.req_spec }}, {{ v.rsp_spec }});
+    function new(string name, fw_component parent, {{ v.provides_spec }} imp = null);
+        super.new(name, parent, imp);
+    endfunction
+endclass
