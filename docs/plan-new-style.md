@@ -285,8 +285,8 @@ P6 status (2026-11-11, see [p6-abstractors.md](p6-abstractors.md)):
   `writing-a-protocol-package.md` (due "P5, finished P7") and `brief-answers.md` (Q3 is
   answered in `rules.md`'s gaps; Q1 in design §3.3; Q2 and Q4 are open).
 
-**Next action:** P9 (§11). The deadlock analysis is on hold: it is to be done statically,
-not in simulation (decided 2026-11-12). P8 is done, committed and pushed (2026-11-12).
+**Next action:** P10 step 6 (§12). The deadlock analysis is on hold: it is to be done statically,
+not in simulation (decided 2026-11-12); proposed as phase F4 of `formal-method-level.md`. P8 is done, committed and pushed (2026-11-12).
 
 Open question raised by the user, not yet decided: move the weavers' SV text into Jinja
 templates (pilot on `xtors.py`; best as an sv-weave `render(template, ctx)` that keeps the
@@ -745,7 +745,7 @@ Changes made in editable dependencies, for upstreaming. Branch `fw-proto-axi-new
 
 ## 9. Later (outlined only)
 
-- **A4, formal generation:** rules → SVA through the field table; SymbiYosys job per wrapped IP; comparison with wb2axip `faxi_slave`. It needs the rules restricted to the formal vocabulary (P7 records where they aren't).
+- **A4, formal generation** (now planned with method-level checking and the static deadlock analysis in [formal-method-level.md](formal-method-level.md), phases F0-F5): rules → SVA through the field table; SymbiYosys job per wrapped IP; comparison with wb2axip `faxi_slave`. It needs the rules restricted to the formal vocabulary (P7 records where they aren't).
 - **A5, monitor transactions:** assemble transactions from channel listener events with ID matching. Data-integrity rule.
 - **A6, systems:** manager → interconnect → RAM assembled at class level; monitors on internal links; DMA as a manager IP.
 - **pyhdl-if:** generate API definitions from the `fw_api` model once pyhdl-if is in the workspace.
@@ -830,3 +830,6 @@ assessment after step 5 says the small weavers read better as templates.
 | — | Assessment: do 6-7 or stop || done (`jinja-feasibility.md` §8): step 6 for `ports.py` + `endpoints.py` only; leave `proxies.py`; skip step 7 |
 | 6 | `ports.py`, `endpoints.py`, `proxies.py` | |
 | 7 | `bases.py`, `listeners.py`, `imps.py` | |
+
+sv-weave 0.3.0 (2026-11-13): P10 steps 2 and 5 (`render()`, per-line template origins), API 0.3,
+default plugin range `>=0.3,<0.4`. Versions go up by 0.1.
