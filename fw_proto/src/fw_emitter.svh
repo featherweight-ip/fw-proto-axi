@@ -4,12 +4,48 @@
 class fw_emitter;
     string m_lines[$];
     int    m_errors;
+    string m_errs[$];       // the error messages, in order
     string m_dir = ".";     // where files are written
 
     function void line(string s); m_lines.push_back(s); endfunction
     function void error(string s);
         $display("[emit] error: %s", s);
+        m_errs.push_back(s);
         m_errors++;
+    endfunction
+
+    // Clock and reset of what the emitter instantiates: the domains of the
+    // component it stands for (docs/design-domains.md §9). The sim top has nets
+    // for the root domains only, so a component in any other domain is an
+    // error naming it and the domain (an empty string when it is fine).
+    function string domain_error(fw_component c);
+        fw_component r = c;
+        while (r.get_parent() != null) r = r.get_parent();
+        if (fw_domains::relate(c.clock.ref_domain(), r.clock.ref_domain()) != FW_DOMAIN_SAME)
+            return {fw_rel_path(c), ": in clock domain ", dom_name(c.clock.ref_domain()),
+                    ", not the root's; the emitted sim top has nets for the root clock and",
+                    " reset only"};
+        if (c.reset.is_connected() || r.reset.is_connected())
+            if (fw_domains::relate(c.reset.ref_domain(), r.reset.ref_domain()) != FW_DOMAIN_SAME)
+                return {fw_rel_path(c), ": in reset domain ", dom_name(c.reset.ref_domain()),
+                        ", not the root's; the emitted sim top has nets for the root clock and",
+                        " reset only"};
+        return "";
+    endfunction
+
+    function string dom_name(fw_domain_if d);
+        return (d != null) ? d.domain_name() : "<none>";
+    endfunction
+
+    // The clock and reset connections for `c` (checked by domain_error()):
+    // the sim top's and every emitted module's `clock` and `reset` nets.
+    function string clk_rst_nets(fw_component c);
+        return ".clock(clock), .reset(reset)";
+    endfunction
+
+    function void clk_rst_conns(fw_component c, ref string conns[$]);
+        conns.push_back(".clock(clock)");
+        conns.push_back(".reset(reset)");
     endfunction
 
     function void flush(string fname);
@@ -196,6 +232,15 @@ class fw_emitter;
                 error({fw_rel_path(bnds[i]), ": linked to ", bnds[i].pin_sp().m_peer.path(),
                        ", which is not RTL"});
         end
+        // Domains: everything instantiated in the sim top is in the root's.
+        foreach (bnds[i]) begin
+            string d = domain_error(bnds[i]);
+            if (d != "") error(d);
+        end
+        foreach (all[i]) if (all[i].is_rtl()) begin
+            string d = domain_error(all[i]);
+            if (d != "") error(d);
+        end
         if (m_errors != 0) return m_errors;
 
         // The netlist: one module per RTL structural class.
@@ -251,7 +296,7 @@ class fw_emitter;
             bnds[i].xtor_pins(pins, fields);
             line($sformatf("    %s %s%s (", bnds[i].xtor_module(), bnds[i].xtor_params(),
                            xtor_inst(bnds[i])));
-            line({"        ", bnds[i].xtor_clk_rst(), (pins.size() == 0) ? "" : ","});
+            line({"        ", clk_rst_nets(bnds[i]), (pins.size() == 0) ? "" : ","});
             foreach (pins[k]) begin
                 if (bnds[i].pin_sp().field_index(fields[k]) < 0)
                     error({fw_rel_path(bnds[i]), ": transactor pin ", pins[k], " needs field ",

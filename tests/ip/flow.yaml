@@ -88,6 +88,14 @@ fragment:
     uses: hdlsim.vlt.SimRun
     needs: [axi-ram-gen-img]
 
+  # The emitter refuses an abstractor outside the root domains (a register-bit
+  # reset domain here), by name (docs/design-domains.md §9).
+  - name: axi-ram-gen-neg
+    uses: hdlsim.vlt.SimRun
+    needs: [axi-ram-gen-img]
+    with:
+      plusargs: [emit_neg_soft_reset]
+
   - name: axi-ram-emitted
     uses: emitted
     needs: [axi-ram-gen]
@@ -133,7 +141,7 @@ fragment:
       return ip_checks.synth(input, "ram_sys")
 
   - name: axi-ram
-    needs: [axi-ram-run, axi-ram-netlist, axi-ram-synth]
+    needs: [axi-ram-run, axi-ram-netlist, axi-ram-synth, axi-ram-gen-neg]
 
   # ---- demofull (wb2axip)
   - name: demofull-rtl

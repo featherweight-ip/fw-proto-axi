@@ -21,12 +21,12 @@ virtual class fw_boundary extends fw_realized;
     // run-time handle class that drives it.
     pure virtual function string vif_type();
     pure virtual function string handle_type();
-    // The transactor's parameters, clock and reset connections.
+    // The transactor's parameters. (Its clock and reset are the boundary's
+    // domains: fw_emitter::clk_rst_nets().)
     virtual function string xtor_params();
         string p = pin_sp().param_lit();
         return (p == "") ? "" : {"#(", p, ") "};
     endfunction
-    virtual function string xtor_clk_rst(); return ".clock(clock), .reset(reset)"; endfunction
     // How the handle `h` joins the parent's endpoint.
     virtual function string join_stmt(string h);
         return {h, ".serve(", m_serves, ");"};

@@ -10,8 +10,7 @@ virtual class fw_rtl_structural extends fw_realized;
 
     virtual function void emit_instance(fw_emitter e, string inst, string nets[string]);
         string conns[$];
-        conns.push_back(".clock(clock)");
-        conns.push_back(".reset(reset)");
+        e.clk_rst_conns(this, conns);
         foreach (m_sps[i]) foreach (m_sps[i].m_fields[f])
             conns.push_back({".", m_sps[i].ep_name(), "_", m_sps[i].m_fields[f].name, "(",
                              nets[m_sps[i].path()], "_", m_sps[i].m_fields[f].name, ")"});
