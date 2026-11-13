@@ -20,6 +20,8 @@ be able to resume from this file alone.
 | P8 Retire the old package | done | old package, cores and suites deleted; `_ns` names dropped; `ci/run.sh` from a clean bootstrap passes (lint-rtl, tests 14/14, fv-cover, fv-prove, fv-teeth). §5 P8 |
 | P9 Docs, Jinja assessment, upstream fixes | in progress | §11 |
 | P10 Weaver text into Jinja templates | in progress | §12 |
+| P11 Domains: reset domains, crossing analysis (fw-hdl); clock/reset out of the protocol | done, uncommitted (patches in `rundir/p11/`) | §13 |
+| P12 API-pair rework: `axi4_bundle` replaced by hand-declared fwd/rev APIs | design | §14 |
 | Later: formal generation (A4), monitor transactions (A5), systems (A6) | not planned in detail | §9 |
 
 **Last update:** 2026-11-12 (P8 committed and pushed, `e71d2b5`; P9 started, §11). Names: the dated notes from P2 to
@@ -828,8 +830,76 @@ assessment after step 5 says the small weavers read better as templates.
 | 4 | `abs.py` on templates || done: 4 templates in `templates/abs/` (132 lines); `abs.py` 284 -> 167 (`AbsView`, `ObserversView`; `connect_method` stays Python until `ports.py`). Added gap golden `fw_proto_axi4_core_pkg_woven_xtor.sv` (the xtor run's AXI4 pkg: bridges + abs glue had no golden), made with the step-1 string weavers, folded into the step-1 patch. fw_proto 32 passed, sv-weave 252/3 xfailed, ci/run.sh pass, `dfm run ip` pass |
 | 5 | sv-weave per-line sub-spans; `verify` diagnostics name template lines || done (sv-weave): `SvText.tlines` from a generator walk + debug info, static chunks placed by the template's `TemplateData` nodes; `SvFragment.spans()` on normalized text; `Emitter.frag` one span per run. All 1778 template-mapped non-blank lines of the xtor run map to the right template line. Planted errors (scratch copy) report `role_bridge.sv.j2:30`, `core.sv.j2:17`. sv-weave 255 passed 3 xfailed; fw_proto 32; ci/run.sh, `dfm run ip` pass |
 | — | Assessment: do 6-7 or stop || done (`jinja-feasibility.md` §8): step 6 for `ports.py` + `endpoints.py` only; leave `proxies.py`; skip step 7 |
-| 6 | `ports.py`, `endpoints.py`, `proxies.py` | |
+| 6 | `ports.py`, `endpoints.py` (`proxies.py` stays Python, per the assessment) | done: 4 templates in `templates/ports/`, `templates/endpoints/` (124 lines); `ports.py` 111 -> 92, `endpoints.py` 88 -> 67, `abs.py` 167 -> 149 (`connect_method` moved into `ports/role_sp.sv.j2`); `apis_of`/`derive_bundle` take `d`. Goldens unchanged; fw_proto 32 passed, ci/run.sh pass, `dfm run ip` pass |
 | 7 | `bases.py`, `listeners.py`, `imps.py` | |
 
 sv-weave 0.3.0 (2026-11-13): P10 steps 2 and 5 (`render()`, per-line template origins), API 0.3,
 default plugin range `>=0.3,<0.4`. Versions go up by 0.1.
+
+## 13. P11: domains (started 2026-11-13)
+
+Decisions (2026-11-13, user):
+- Clock and reset are tracked as domains, not as protocol facts. API classes carry no
+  clock or reset; an interface takes the domain of the component that provides or uses
+  it, which normally inherits its parent's. At the signal level, transactors bridge
+  pins to/from the domain.
+- Domains have kinds (clock, reset, later power). Reset becomes a domain kind now, for
+  consistency with clock.
+- Crossings are found by analysis: logic that works with two different domains,
+  typically through interfaces (bindings whose ends are in different domains).
+- Special reset domains are needed, e.g. one controlled by a register bit.
+- Done in this packet, in `packages/fw-hdl` (branch `fw-proto-axi-new`).
+- The API-pair rework is P12 (§14).
+- (2026-11-13, later) Behavior follows the reset domain: `run()` starts on deassertion
+  and is killed with its descendants on assertion; `step()` is not gated (design §4.5,
+  U7). Replaces design Q2's first answer. Added as step F2b.
+
+| Step | What | Status |
+|---|---|---|
+| 1 | Design doc `docs/design-domains.md` | done (§11 answered: recommendations accepted) |
+| 2 | fw-hdl: reset domain kind, derived reset domains, crossing analysis, tests, docs | done (uncommitted) |
+| 3 | Here: transactors and abstractors take clock/reset from the domain; `fw_clock`/`fw_reset_n` removed | done (uncommitted); `CI_SKIP_BOOTSTRAP=1 ci/run.sh` and `dfm run ip` pass. Open: H5, lowering a supervised `run()`, `fw_reset_sync_domain` |
+
+Implementation (design §10). Uncommitted; one patch per step in `rundir/p11/p11-<step>-<repo>.patch`
+(per-step diff; `p11-cumulative-*` is the running total), logs in `rundir/logs/p11-*.log`.
+
+| Step | Status |
+|---|---|
+| F1 domain shape | done: fw-hdl sim tests all pass, `clock_domain` + relate() checks; pytest 291/2s; rv_proto 9/9 |
+| F2 reset kind | done: new `tests/reset_domain`; sim tests all pass; pytest 295/2s (+4 `test_elab_reset_domain.py`); rv_proto 9/9 |
+| F2b run lifecycle (U7, added 2026-11-13: `run()` follows the reset domain; design §4.5) | done with F2 (one patch, `p11-F2-*`): supervisor + `disable fork`, `reset_state()`, front end rejects a supervised `run()` |
+| F3 derived resets | done: `fw_reg_reset_domain`, `fw_reset_combine`; `reset_domain` test extended; pytest 296/2s (reg-bit `in_reset()` lowers to `reset \|\| ctrl[3]`); rv_proto 9/9 |
+| F4 crossing analysis | done: `fw_crossing(_check)`, run in `start()`; new `tests/crossing` (8 cases) + `test_crossing_sim.py` ($fatal/JSON/off/sev); Partition records domains and rejects 2nd clock / derived reset (`test_partition_domains.py`); no existing tree reports a crossing; pytest 304/2s; rv_proto 9/9 |
+| F5 fw-hdl docs | done: `reference/clocking.md` → domains reference, `components.md` §Domains, `islands.md`, `synthesis.md` §Domains, fw-hdl skill §4; sphinx `-W` builds. Full `dfm run tests`: only the 16 known G6 xls failures (483 pass, bigmem deselected) |
+| H1 weaver | done: `fw_clock`/`fw_reset`/`fw_reset_n` removed (an error naming design-domains.md, tested); transactors take `clock`/`reset` (active high); `xtor_clk_rst()` override gone; goldens: 14 files, pin renames and the reset inversion only (checked by script); pytest 33/33 (+1) |
+| H2 emitter | done: `xtor_clk_rst()` removed; `fw_emitter::domain_error()`/`clk_rst_nets()` (root domains only, D8); new `ip.axi-ram-gen-neg` (dut in a reg-bit reset domain: rejected naming `dut.s_abs` and `ram_top.srst`); `dfm run ip` passes |
+| H3 benches | done: 5 benches connect `.clock(aclk), .reset(!aresetn)` (`axi4_lint_rtl.sv` needs none); `dfm run tests` 14/14, lint-rtl, fv-cover, fv-prove, fv-teeth, fv pass |
+| H4 docs | done: core-spec, writing-a-protocol-package, derived-classes, p6-abstractors, reference-ips, fw_proto/README, rules.md gap 8 (points at H5, not done); design doc §12 "As built" |
+
+## 14. P12: API-pair rework (decided 2026-11-13, not started)
+
+Why: sv-weave methodology declares only SV that has a legitimate use. `axi4_bundle` is
+never instantiated, extended or referenced; it exists only as weaver input. The fwd/rev
+channel APIs (`axi4_req_if`, `axi4_rsp_if`), generated from it today, are hand-declared
+instead, carrying the weave facts as attributes. The overhead is small.
+
+Decisions (2026-11-13, user):
+- **No clock or reset on the APIs.** `axi4_req_if`/`axi4_rsp_if` are pure APIs; clock and
+  reset are device considerations, tracked as domains (P11, §13). `fw_clock`,
+  `fw_reset`, `fw_reset_n` are not carried over to the API classes. Generated transactors
+  take `clock` and an active-high `reset` from their domain; a device with other pin
+  names or polarity (`ACLK`, `ARESETn`) relates them in its pin map.
+- **No defs-package attribute.** The class-free package is the one that declares the
+  parameter struct type (`axi4_param_t`); the weaver derives it.
+- **Handshake family is a transactor fact,** not an API one: an option of the xtor
+  derivation (default `fw_rv`), not a per-channel member type.
+
+Still to decide: how a fwd/rev pair is declared (e.g. `fw_peer` on both, or on fwd
+only), and how the calling role is named (`fw_role` per API). The same pairing applies to
+`axi4_burst_{req,rsp}_if`, so their hand-written sockets become generated.
+
+Scope when started: hand-declared `axi4_req_if.svh`/`axi4_rsp_if.svh`; `axi4_bundle.svh`
+deleted; `bundle.py` builds `Bundle` from an API pair, owning the derived facts (item 1 of
+the commonality review: API names, sends/other role, `fw_opt` condition, parameter type);
+`channel_apis` removed; synthetic test bundles become API pairs; goldens change only by
+the API classes moving to the core package and comment wording (checked by diff); docs.
