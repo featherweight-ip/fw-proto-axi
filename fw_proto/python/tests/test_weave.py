@@ -23,7 +23,10 @@ DEFS = os.path.join(ROOT, "src/core/fw_proto_axi4_defs_pkg.sv")
 # fw-hdl, the runtime and the AXI4 core: what every weave here reads.
 BASE = HDL_SOURCES + [os.path.join(ROOT, "fw_proto/src/fw_proto_pkg.sv"), DEFS,
                       os.path.join(ROOT, "src/core/fw_proto_axi4_core_pkg.sv")]
-SOURCES = BASE + [os.path.join(ROOT, "tests/weave/synth/weave_synth_pkg.sv")]
+SYNTH = os.path.join(ROOT, "tests", "weave", "synth")
+# The synthetic API and the synthetic bundle (no struct parameter, active-high reset).
+SOURCES = BASE + [os.path.join(SYNTH, f) for f in ("weave_synth_pkg.sv",
+                                                   "weave_synth_bundle_pkg.sv")]
 CFG = """
 sv-weave:
   binding: fw_proto_weave:FwProtoBinding
@@ -50,7 +53,7 @@ def _classes(text):
 
 
 @pytest.mark.parametrize("pkg", ["fw_proto_axi4_defs_pkg_woven", "fw_proto_axi4_core_pkg_woven",
-                                 "weave_synth_pkg_woven"])
+                                 "weave_synth_pkg_woven", "weave_synth_bundle_pkg_woven"])
 def test_golden(woven, pkg):
     text = woven.file(pkg + ".sv").text
     path = os.path.join(GOLDEN, pkg + ".sv")
@@ -78,6 +81,7 @@ module lint_top;
   import fw_proto_axi4_core_pkg::*;
   import fw_proto_axi4_core_pkg_woven::*;
   import weave_synth_pkg_woven::*;
+  import weave_synth_bundle_pkg_woven::*;
   localparam axi4_param_t P_MIN = '{ADDR_W: 32, DATA_W: 32, ID_W: 0, AWUSER_W: 0,
       WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0, HAS_QOS: 0, HAS_REGION: 0};
   localparam axi4_param_t P_WIDE = '{ADDR_W: 64, DATA_W: 512, ID_W: 8, AWUSER_W: 4,
@@ -87,6 +91,10 @@ module lint_top;
   axi4_req_if_proxy #(P_MIN) q0 = new;
   axi4_rsp_if_listener_fanout #(P_WIDE) f1 = new;
   syn_if_proxy #(byte, 6) s0 = new;
+  synb_host_sp #(12, 32) h0 = new("h0");
+  synb_dev_sp #(4, 8) d0 = new("d0");
+  synb_req_if_proxy #(12, 32) bq0 = new;
+  synb_rsp_if_listener_fanout #(4, 8) bf0 = new;
 endmodule
 """
 
@@ -119,6 +127,10 @@ RV_SOURCES = [os.path.join(RV, "fw_rv_%s_xtor%s.sv" % (k, s))
               for k in ("initiator", "target", "monitor") for s in ("_if", "_core", "")]
 XTOR_FILES = ["axi4_%s_xtor%s.sv" % (r, s) for r in ("mgr", "sub", "mon")
               for s in ("", "_core", "_if")]
+# The synthetic transactor bundle: active-high reset, roles ctl/per.
+SYNX_SOURCES = [os.path.join(SYNTH, f) for f in ("weave_synx_defs_pkg.sv", "weave_synx_pkg.sv")]
+SYNX_FILES = ["synx_%s_xtor%s.sv" % (r, s) for r in ("ctl", "per", "mon")
+              for s in ("", "_core", "_if")]
 XTOR_CFG = CFG + "    options: {xtor: true}\n"
 
 
@@ -131,8 +143,8 @@ def woven_xtor(tmp_path_factory):
     # payload structs with the same members (aw_t, ar_t at default P) for one type
     # in an interface's type parameter and rejects the vif assignments. Verilator
     # checks the wrappers instead (test_xtor_lint_wall).
-    spec.files.extend(BASE + RV_SOURCES + [os.path.join(ROOT, "src", "weave",
-                                                               "xtor_weave_top.sv")])
+    spec.files.extend(BASE + SYNX_SOURCES + RV_SOURCES
+                      + [os.path.join(ROOT, "src", "weave", "xtor_weave_top.sv")])
     spec.incdirs.extend(INCDIRS)
     spec.tops = ["xtor_weave_top"]
     return run(parse_config(XTOR_CFG, base_dir=ROOT), spec=spec, out_dir=out)
@@ -140,17 +152,30 @@ def woven_xtor(tmp_path_factory):
 
 def test_xtor_files(woven_xtor):
     assert woven_xtor.verify_status == "full"
-    assert woven_xtor.compile_order[-9:] == sorted(XTOR_FILES)
+    assert woven_xtor.compile_order[-18:] == sorted(XTOR_FILES + SYNX_FILES)
     names = _classes(woven_xtor.file("fw_proto_axi4_core_pkg_woven.sv").text)
     for role in ("mgr", "sub", "mon"):
         assert "axi4_%s_xtor_chans" % role in names
         assert "axi4_%s_xtor_bridge" % role in names
 
 
-@pytest.mark.parametrize("name", XTOR_FILES)
+@pytest.mark.parametrize("name", XTOR_FILES + SYNX_FILES
+                         + ["weave_synx_pkg_woven.sv", "weave_synx_defs_pkg_woven.sv"])
 def test_xtor_golden(woven_xtor, name):
     text = woven_xtor.file(name).text
     path = os.path.join(GOLDEN, name)
+    if os.environ.get("FW_PROTO_REGEN"):
+        with open(path, "w") as fp:
+            fp.write(text)
+    with open(path) as fp:
+        assert text == fp.read(), "woven output differs from %s (FW_PROTO_REGEN=1 to refresh)" % path
+
+
+def test_xtor_pkg_golden(woven_xtor):
+    """The xtor run's AXI4 package: the chans classes, the bridges and the abstractor
+    glue (xtors.py, abs.py), which the plain run does not emit."""
+    text = woven_xtor.file("fw_proto_axi4_core_pkg_woven.sv").text
+    path = os.path.join(GOLDEN, "fw_proto_axi4_core_pkg_woven_xtor.sv")
     if os.environ.get("FW_PROTO_REGEN"):
         with open(path, "w") as fp:
             fp.write(text)
@@ -163,10 +188,13 @@ module xtor_lint_top;
   import fw_proto_axi4_defs_pkg::*;
   import fw_proto_axi4_core_pkg::*;
   import fw_proto_axi4_core_pkg_woven::*;
+  import weave_synx_defs_pkg::*;
+  import weave_synx_pkg_woven::*;
   localparam axi4_param_t P_MIN = '{ADDR_W: 32, DATA_W: 32, ID_W: 0, AWUSER_W: 0,
       WUSER_W: 0, BUSER_W: 0, ARUSER_W: 0, RUSER_W: 0, HAS_QOS: 0, HAS_REGION: 0};
   localparam axi4_param_t P_WIDE = '{ADDR_W: 64, DATA_W: 512, ID_W: 8, AWUSER_W: 4,
       WUSER_W: 2, BUSER_W: 1, ARUSER_W: 3, RUSER_W: 5, HAS_QOS: 1, HAS_REGION: 1};
+  localparam synx_param_t SX_MIN = '{DATA_W: 8, HAS_PRI: 0};
   %s
 endmodule
 """
@@ -182,9 +210,14 @@ def test_xtor_lint_wall(woven_xtor, tmp_path):
             insts.append("axi4_%s_xtor #(%s) u%d ();" % (role, p, i))
             insts.append("axi4_%s_xtor_bridge #(%s) b%d = new(u%d.u_if);" % (role, p, i, i))
             i += 1
+    for role in ("ctl", "per", "mon"):
+        for p in ("SX_MIN", "SYNX_PARAM_DEFAULT"):
+            insts.append("synx_%s_xtor #(%s) u%d ();" % (role, p, i))
+            insts.append("synx_%s_xtor_bridge #(%s) b%d = new(u%d.u_if);" % (role, p, i, i))
+            i += 1
     top = tmp_path / "xtor_lint_top.sv"
     top.write_text(XTOR_LINT_TOP % "\n  ".join(insts))
-    files = (BASE + RV_SOURCES
+    files = (BASE + SYNX_SOURCES + RV_SOURCES
              + [os.path.join(woven_xtor.out_dir, n) for n in woven_xtor.compile_order
                 if n.endswith(".sv")
                 and n not in ("sv_weave_init_pkg.sv", "sv_weave_init_m.sv")] + [str(top)])
@@ -193,7 +226,7 @@ def test_xtor_lint_wall(woven_xtor, tmp_path):
            "-Wno-UNUSEDSIGNAL", "-Wno-UNDRIVEN", "-Wno-PINMISSING",
            "--top-module", "xtor_lint_top"] + INC_ARGS + files
     r = subprocess.run(cmd, capture_output=True, text=True)
-    gen = tuple(XTOR_FILES) + ("_woven.sv",)
+    gen = tuple(XTOR_FILES + SYNX_FILES) + ("_woven.sv",)
     msgs = [l for l in r.stderr.splitlines() if l.startswith("%") and any(g in l for g in gen)]
     errs = [l for l in r.stderr.splitlines() if l.startswith("%Error")]
     assert r.returncode == 0 and not msgs and not errs, r.stderr[-3000:]
@@ -210,10 +243,74 @@ def test_xtor_cores_class_free(woven_xtor, tmp_path):
     package, its woven part, fw-hdl's rv cores and the generated cores, with no
     class package in the list."""
     gen = [os.path.join(woven_xtor.out_dir, n) for n in
-           ["fw_proto_axi4_defs_pkg_woven.sv"] + [f for f in XTOR_FILES if f.endswith("_core.sv")]]
+           ["fw_proto_axi4_defs_pkg_woven.sv", "weave_synx_defs_pkg_woven.sv"]
+           + [f for f in XTOR_FILES + SYNX_FILES if f.endswith("_core.sv")]]
     rv = [f for f in RV_SOURCES if f.endswith("_core.sv")]
-    r = subprocess.run([_sv2v(), DEFS] + gen + rv, capture_output=True, text=True)
+    r = subprocess.run([_sv2v(), DEFS, SYNX_SOURCES[0]] + gen + rv, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr[-3000:]
     for role in ("mgr", "sub", "mon"):
         assert "module axi4_%s_xtor_core" % role in r.stdout
+    for role in ("ctl", "per", "mon"):
+        assert "module synx_%s_xtor_core" % role in r.stdout
 
+
+
+# ---- the rv pilot config (tests/weave/rv): fw-hdl's rv APIs, a #(type T) header -----
+
+RV_CFG = os.path.join(ROOT, "tests", "weave", "rv", "sv-weave.yaml")
+HDL_CORE = [os.path.join(HDL, f) for f in ("fw_hdl_pkg.sv", "fw_clock_xtor_if.sv",
+                                           "fw_clock_period_xtor_if.sv",
+                                           "fw_clock_period_xtor.sv", "fw_root.sv")]
+HDL_STD = [os.path.join(HDL, "std", f) for f in ("fw_std_pkg.sv", "fw_put_xtor_if.sv")]
+# fw-hdl.hdl.sv-src and fw-hdl.hdl.rv-src, as tests/flow.yaml's rv-pilot-woven reads them.
+RV_PILOT_SOURCES = HDL_CORE + HDL_STD + [os.path.join(RV, "fw_rv_pkg.sv")] + RV_SOURCES
+RV_INCDIRS = [HDL, os.path.join(HDL, "std"), RV]
+
+
+@pytest.fixture(scope="module")
+def woven_rv(tmp_path_factory):
+    from sv_weave.filelist import SourceSpec
+    out = str(tmp_path_factory.mktemp("woven_rv"))
+    spec = SourceSpec()
+    spec.files.extend(RV_PILOT_SOURCES)
+    spec.incdirs.extend(RV_INCDIRS)
+    with open(RV_CFG) as fp:
+        cfg = parse_config(fp.read(), path=RV_CFG, base_dir=os.path.dirname(RV_CFG))
+    return run(cfg, spec=spec, out_dir=out)
+
+
+def test_rv_golden(woven_rv):
+    assert woven_rv.verify_status == "full"
+    text = woven_rv.file("fw_rv_pkg_woven.sv").text
+    path = os.path.join(GOLDEN, "fw_rv_pkg_woven.sv")
+    if os.environ.get("FW_PROTO_REGEN"):
+        with open(path, "w") as fp:
+            fp.write(text)
+    with open(path) as fp:
+        assert text == fp.read(), "woven output differs from %s (FW_PROTO_REGEN=1 to refresh)" % path
+
+
+RV_LINT_TOP = """
+module rv_lint_top;
+  import fw_rv_pkg_woven::*;
+  fw_rv_initiator_if_proxy #(byte) p0 = new;
+  fw_rv_target_if_listener_fanout #(int) f0 = new;
+  fw_rv_monitor_if_base #(logic [7:0]) m0;
+endmodule
+"""
+
+
+@pytest.mark.skipif(_verilator() is None, reason="verilator not found")
+def test_rv_lint_wall(woven_rv, tmp_path):
+    top = tmp_path / "rv_lint_top.sv"
+    top.write_text(RV_LINT_TOP)
+    files = RV_PILOT_SOURCES + [
+        os.path.join(woven_rv.out_dir, "fw_rv_pkg_woven.sv"), str(top)]
+    # -Wno-fatal: fw-hdl carries warnings of its own; only the woven file counts.
+    cmd = [_verilator(), "--lint-only", "-Wall", "-Wno-fatal", "--timing", "-Wno-UNUSEDPARAM",
+           "-Wno-UNUSEDSIGNAL", "-Wno-UNDRIVEN", "--top-module", "rv_lint_top"] + [
+        "+incdir+" + d for d in RV_INCDIRS] + files
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    msgs = [l for l in r.stderr.splitlines() if l.startswith("%") and "_woven.sv" in l]
+    errs = [l for l in r.stderr.splitlines() if l.startswith("%Error")]
+    assert r.returncode == 0 and not msgs and not errs, r.stderr[-3000:]
