@@ -1,0 +1,30 @@
+// {{ x.what }}. {{ x.name }}_core on the pins, one fw-hdl
+// rv interface per channel on its links (names as in the field table and on
+// the protocol checker, so `.*` connects). The class side is u_if
+// ({{ x.name }}_if), driven by {{ x.name }}_bridge.
+module {{ x.name }}
+    {{ x.imports }}
+{{ x.header }} (
+{% for p in x.pins %}
+{{ p }}
+{% endfor %}
+);
+{# Payload typedefs for the vif parameters (see chans.sv.j2). #}
+{% for c in x.chans %}
+    typedef {{ c.payload }} {{ c.payload_name }};
+{% endfor %}
+    {{ x.name }}_if {{ x.params_ref }} u_if ();
+{% for c in x.chans %}
+
+    {{ c.payload_name }} {{ c.name }}_up_data;
+    bit {{ c.up_sigs|join(", ") }};
+    fw_rv_{{ c.kind }}_xtor_if #(.T({{ c.payload_name }})) u_{{ c.name }}_if ({{ c.if_conns|join(", ") }});
+{% endfor %}
+
+    {{ x.name }}_core {{ x.params_ref }} u_core (.*, {{ x.links|join(", ") }});
+
+    initial begin
+        u_if.chans = new({{ x.chan_ifs|join(", ") }});
+        u_if.bound = 1;
+    end
+endmodule : {{ x.name }}

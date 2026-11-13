@@ -51,6 +51,11 @@ package:
     - name: sv-weave
       url: https://github.com/sv-weave/sv-weave.git
       dep-set: use
+    # The fw_proto weavers keep their SV text in Jinja templates
+    # (fw_proto/python/fw_proto_weave/templates), rendered by sv-weave
+    # (its `templates` extra: jinja2>=3.1,<3.2).
+    - name: jinja2
+      src: pypi
     # Reference IPs for the extern-wrapping tests (tests/ip, plan P6.4). RTL
     # only, read as sources; nothing here builds them.
     - name: verilog-axi

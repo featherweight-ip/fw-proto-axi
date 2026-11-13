@@ -1,0 +1,30 @@
+{# The channel transactors' handles: a class, since an interface may not hold vifs.
+   The typedefs name the payloads for the vif parameters: Verilator (5.055) faults on
+   a virtual interface whose type parameter is a class-scoped type of a parameter. #}
+// The channel transactors of {{ x.name }}, as virtual interfaces.
+class {{ x.name }}_chans {{ x.header }};
+{% for c in x.chans %}
+    typedef {{ c.payload }} {{ c.payload_name }};
+{% endfor %}
+{% for c in x.chans %}
+    virtual {{ c.vif_type }} {{ c.name }};
+{% endfor %}
+    function new({{ x.chans_args|join(", ") }});
+{% for c in x.chans %}
+        {{ c.name }} = {{ c.name }}_;
+{% endfor %}
+    endfunction
+
+    // Sets one channel's knob by path, "<ch>.{{ x.knobs|join("|") }}". 0 if there is no such knob.
+    function bit set_knob(string path, int unsigned v);
+        case (path)
+{% for c in x.chans %}
+{% for k in x.knobs %}
+            "{{ c.name }}.{{ k }}": {{ c.name }}.{{ k }} = v;
+{% endfor %}
+{% endfor %}
+            default: return 0;
+        endcase
+        return 1;
+    endfunction
+endclass

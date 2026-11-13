@@ -1,0 +1,29 @@
+// What {{ x.name }} sees, as listener calls: <ch>_pre on the first valid
+// cycle of a beat, <ch>_post on its handshake. Add listeners to req and rsp.
+class {{ x.name }}_bridge {{ x.header }};
+{% for c in x.chans %}
+    typedef {{ c.api_spec }}::{{ c.payload_name }} {{ c.payload_name }};
+{% endfor %}
+    {{ x.vif }} vif;
+    {{ x.req_fanout }} req = new();
+    {{ x.rsp_fanout }} rsp = new();
+
+    function new({{ x.vif }} vif_);
+        this.vif = vif_;
+    endfunction
+
+    virtual task run();
+        wait (vif.bound);
+        fork
+{% for c in x.chans %}
+            forever begin
+                {{ c.payload_name }} t;
+                bit first, xfer;
+                vif.chans.{{ c.name }}.get_ev(t, first, xfer);
+                if (first) {{ c.fan }}.{{ c.name }}_pre(t);
+                if (xfer) {{ c.fan }}.{{ c.name }}_post(t);
+            end
+{% endfor %}
+        join
+    endtask
+endclass

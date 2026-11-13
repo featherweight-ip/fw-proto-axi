@@ -1,0 +1,25 @@
+// {{ x.what }}: the synthesizable core. One fw-hdl rv
+// core per channel, the payloads (flat, packed as their structs) spliced onto
+// the pins (names as in the field table and on the protocol checker). The
+// <ch>_up_* links go to the class side ({{ x.name }} adds the rv interfaces).
+module {{ x.name }}_core
+    import {{ x.dp }}::*, {{ x.dp }}_woven::*;
+{{ x.header }} (
+{% for p in x.core_pins %}
+{{ p }}
+{% endfor %}
+);
+{% for c in x.chans %}
+
+    // {{ c.name }}: {{ c.verb }}
+    localparam int unsigned {{ c.up }}_BITS = {{ c.bits_fn }}({{ x.struct_param }});
+{% for m in c.members %}
+    localparam int unsigned {{ c.up }}_{{ m.up }}_LSB = {{ m.lsb }};
+{% endfor %}
+    logic [{{ c.up }}_BITS-1:0] {{ c.name }}_d;
+    fw_rv_{{ c.kind }}_xtor_core #(.W({{ c.up }}_BITS)) u_{{ c.name }} ({{ c.core_conns|join(", ") }});
+{% for m in c.members %}
+    assign {{ m.lhs }} = {{ m.rhs }};
+{% endfor %}
+{% endfor %}
+endmodule : {{ x.name }}_core

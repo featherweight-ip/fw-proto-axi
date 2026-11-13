@@ -32,7 +32,8 @@ class-free package (``fw_defs_pkg``), which the synthesizable cores import.
                                  beat and ``<ch>_post`` on its handshake, on the
                                  ``req``/``rsp`` listener fan-outs.
 
-Only ``fw_rv_ch`` channels are supported.
+Only ``fw_rv_ch`` channels are supported. The SV text is in ``templates/xtors/``;
+here are the checks, the widths and the view objects the templates read.
 """
 import re
 from typing import List, Tuple
@@ -97,42 +98,88 @@ def check(b: Bundle, err) -> bool:
     return True
 
 
-def _typedefs(b: Bundle) -> List[str]:
-    """``typedef <payload> <name>;`` per channel. The vif and transactor parameters
-    use these names: Verilator (5.055) faults on a virtual interface whose type
-    parameter is written as a class-scoped type of a parameter (``ty #(P)::b_t``)."""
-    return ["    typedef %s %s;" % (c.payload, c.payload_name) for c in b.channels]
+# ---- what the templates (templates/xtors/) read ------------------------------------
+class _Member:
+    """One payload member of a channel: its LSB in the flat payload, and the assign
+    that splices it onto its pin (the fw_opt guard applied)."""
+
+    def __init__(self, b: Bundle, ch: "_Chan", i: int):
+        m = ch.c.members[i]
+        later = [_width(x.type) for x in ch.c.members[i + 1:]]
+        self.up = m.name.upper()
+        self.lsb = " + ".join(later) if later else "0"
+        pin = "%s%s" % (ch.name, m.name)
+        fld = "%s_d[%s_%s_LSB +: %s]" % (ch.name, ch.up, self.up, _width(m.type))
+        src, self.lhs = (fld, pin) if ch.kind == "initiator" else (pin, fld)
+        opt = m.attrs.get("fw_opt")
+        self.rhs = src if opt is None else "(%s) ? %s : '0" % (_opt_cond(b, opt), src)
 
 
-def render_chans(b: Bundle, role: str) -> str:
+class _Chan:
+    """One channel, as one role's transactor sees it."""
+
+    def __init__(self, b: Bundle, role: str, c: Channel):
+        self.c = c
+        self.name, self.payload, self.payload_name = c.name, c.payload, c.payload_name
+        self.kind = _kind(b, role, c)
+        self.up = c.name.upper()
+        self.verb = {"initiator": "sent", "target": "received", "monitor": "observed"}[self.kind]
+        self.bits_fn = bits_fn(b, c)
+        self.vif_type = "fw_rv_%s_xtor_if #(%s)" % (self.kind, c.payload_name)
+        sigs = ["up_valid", "up_ready"] + (["up_first", "up_xfer"]
+                                           if self.kind == "monitor" else [])
+        self.up_sigs = ["%s_%s" % (c.name, s) for s in sigs]
+        self.links = [".%s_%s(%s_%s)" % (c.name, s, c.name, s) for s in ["up_data"] + sigs]
+        clk, rst_hi = b.clock, _clock_reset(b)[2]
+        self.if_conns = [".clock(%s)" % clk, ".reset(%s)" % rst_hi] + [
+            ".%s(%s_%s)" % (s, c.name, s) for s in ["up_data"] + sigs]
+        core = ["up_data", "up_valid"] + (["up_first", "up_xfer"]
+                                          if self.kind == "monitor" else []) + ["up_ready"]
+        self.core_conns = ([".clock(%s)" % clk, ".reset(%s)" % rst_hi]
+                           + [".%s(%s_%s)" % (s, c.name, s) for s in core]
+                           + [".data(%s_d)" % c.name, ".valid(%svalid)" % c.name,
+                              ".ready(%sready)" % c.name])
+        api = api_names(b)[0 if c.fwd else 1]
+        self.api_spec = b.spec(api)
+        self.fan = "req" if c.fwd else "rsp"
+        self.members = [_Member(b, self, i) for i in range(len(c.members))]
+
+
+class XtorView:
+    """What the xtors/ templates read for one role (or mon) of a bundle."""
+
+    def __init__(self, b: Bundle, role: str, pkg: str = ""):
+        self.role = role
+        self.name = xtor_name(b, role)
+        self.header, self.params_ref, self.struct_param = b.header, b.params_ref, b.struct_param
+        self.chans = [_Chan(b, role, c) for c in b.channels]
+        # Run-time knobs by path, "<ch>.<knob>": the monitor has a queue depth only;
+        # initiators and targets also have max_gap (their stall setting).
+        self.knobs = ["depth"] if role == MON else ["depth", "max_gap"]
+        self.chans_args = ["virtual %s %s_" % (c.vif_type, c.name) for c in self.chans]
+        self.chan_ifs = ["u_%s_if" % c.name for c in self.chans]
+        self.links = [l for c in self.chans for l in c.links]
+        self.what = _what(b, role)
+        self.dp = b.defs_pkg
+        self.imports = _imports(b, pkg) if pkg else ""
+        self.pins = _ports(b, role, False)
+        self.core_pins = _ports(b, role, True)
+        self.vif = "virtual %s_if %s" % (self.name, b.params_ref)
+        req, rsp = api_names(b)
+        self.req_fanout = b.spec(req + "_listener_fanout")
+        self.rsp_fanout = b.spec(rsp + "_listener_fanout")
+        if role != MON:
+            self.sends = [c for c in self.chans if _sends(b, role, c.c)]
+            self.recvs = [c for c in self.chans if not _sends(b, role, c.c)]
+            self.out_api, self.in_api = (req, rsp) if role == b.roles[0] else (rsp, req)
+            self.out_spec, self.in_spec = b.spec(self.out_api), b.spec(self.in_api)
+            self.in_arg = self.in_api[len(b.proto) + 1:-3]                  # rsp / req
+            self.in_var = "m_" + self.in_arg
+
+
+def render_chans(d, b: Bundle, role: str) -> str:
     """The channel transactors' handles (a class: an interface may not hold vifs)."""
-    name = xtor_name(b, role) + "_chans"
-    out = ["// The channel transactors of %s, as virtual interfaces." % xtor_name(b, role),
-           "class %s %s;" % (name, b.header)]
-    out += _typedefs(b)
-    out += ["    virtual fw_rv_%s_xtor_if #(%s) %s;" % (_kind(b, role, c), c.payload_name, c.name)
-            for c in b.channels]
-    args = ", ".join("virtual fw_rv_%s_xtor_if #(%s) %s_" % (_kind(b, role, c), c.payload_name,
-                                                             c.name) for c in b.channels)
-    out.append("    function new(%s);" % args)
-    out += ["        %s = %s_;" % (c.name, c.name) for c in b.channels]
-    out.append("    endfunction")
-    # Run-time knobs by path, "<ch>.<knob>": the monitor has a queue depth only;
-    # initiators and targets also have max_gap (their stall setting).
-    knobs = ["depth"] if role == MON else ["depth", "max_gap"]
-    out += ["",
-            "    // Sets one channel's knob by path, \"<ch>.%s\". 0 if there is no such knob."
-            % "|".join(knobs),
-            "    function bit set_knob(string path, int unsigned v);",
-            "        case (path)"]
-    for c in b.channels:
-        out += ['            "%s.%s": %s.%s = v;' % (c.name, k, c.name, k) for k in knobs]
-    out += ["            default: return 0;",
-            "        endcase",
-            "        return 1;",
-            "    endfunction",
-            "endclass"]
-    return "\n".join(out) + "\n"
+    return d.render("xtors/chans.sv.j2", x=XtorView(b, role))
 
 
 # ---- the class-free (synthesizable) layer -----------------------------------------
@@ -229,202 +276,49 @@ def _what(b: Bundle, role: str) -> str:
     return "The %s side of %s" % (role, b.decl_name)
 
 
-def render_xtor_core(b: Bundle, role: str) -> str:
-    """The synthesizable part of a role's transactor: one fw-hdl rv core per channel,
-    the payloads (flat, in their structs' layout) spliced onto the pins. No classes:
-    it reads only the bundle's class-free package and its woven part."""
-    name = xtor_name(b, role) + "_core"
-    _, _, rst_hi = _clock_reset(b)
-    clk = b.clock
-    dp = b.defs_pkg
-    out = ["// %s: the synthesizable core. One fw-hdl rv" % _what(b, role),
-           "// core per channel, the payloads (flat, packed as their structs) spliced onto",
-           "// the pins (names as in the field table and on the protocol checker). The",
-           "// <ch>_up_* links go to the class side (%s adds the rv interfaces)." % xtor_name(b, role),
-           "module %s\n    import %s::*, %s_woven::*;\n%s (" % (name, dp, dp, b.header)]
-    out += _ports(b, role, True)
-    out.append(");")
-    for c in b.channels:
-        kind = _kind(b, role, c)
-        up = c.name.upper()
-        out += ["",
-                "    // %s: %s" % (c.name, {"initiator": "sent", "target": "received",
-                                            "monitor": "observed"}[kind]),
-                "    localparam int unsigned %s_BITS = %s(%s);" % (up, bits_fn(b, c), b.struct_param)]
-        lsb = []
-        for i, m in enumerate(c.members):
-            later = [_width(x.type) for x in c.members[i + 1:]]
-            lsb.append(" + ".join(later) if later else "0")
-        for m, l in zip(c.members, lsb):
-            out.append("    localparam int unsigned %s_%s_LSB = %s;" % (up, m.name.upper(), l))
-        out.append("    logic [%s_BITS-1:0] %s_d;" % (up, c.name))
-        conns = [".clock(%s)" % clk, ".reset(%s)" % rst_hi,
-                 ".up_data(%s_up_data)" % c.name, ".up_valid(%s_up_valid)" % c.name]
-        if kind == "monitor":
-            conns += [".up_first(%s_up_first)" % c.name, ".up_xfer(%s_up_xfer)" % c.name]
-        conns += [".up_ready(%s_up_ready)" % c.name, ".data(%s_d)" % c.name,
-                  ".valid(%svalid)" % c.name, ".ready(%sready)" % c.name]
-        out.append("    fw_rv_%s_xtor_core #(.W(%s_BITS)) u_%s (%s);"
-                   % (kind, up, c.name, ", ".join(conns)))
-        for m in c.members:
-            pin = "%s%s" % (c.name, m.name)
-            fld = "%s_d[%s_%s_LSB +: %s]" % (c.name, up, m.name.upper(), _width(m.type))
-            opt = m.attrs.get("fw_opt")
-            if kind == "initiator":
-                rhs = fld if opt is None else "(%s) ? %s : '0" % (_opt_cond(b, opt), fld)
-                out.append("    assign %s = %s;" % (pin, rhs))
-            else:
-                rhs = pin if opt is None else "(%s) ? %s : '0" % (_opt_cond(b, opt), pin)
-                out.append("    assign %s = %s;" % (fld, rhs))
-    out.append("endmodule : %s" % name)
-    return "\n".join(out) + "\n"
-
-
 def _imports(b: Bundle, pkg: str) -> str:
     return "import %s::*, %s_woven::*, %s::*, %s_woven::*;" % (b.defs_pkg, b.defs_pkg, pkg, pkg)
 
 
-def render_xtor_if(b: Bundle, role: str, pkg: str) -> str:
-    name = xtor_name(b, role) + "_if"
-    out = ["// The class side of %s (u_if): %s sets chans at time 0," % (xtor_name(b, role),
-                                                                     xtor_name(b, role)),
-           "// then raises bound; %s_bridge waits for bound." % xtor_name(b, role),
-           "interface %s\n    %s\n%s;" % (name, _imports(b, pkg), b.header),
-           "    %s_chans %s chans;" % (xtor_name(b, role), b.params_ref),
-           "    bit bound;",
-           "endinterface : %s" % name]
-    return "\n".join(out) + "\n"
+def render_xtor_core(d, b: Bundle, role: str) -> str:
+    """The synthesizable part of a role's transactor: one fw-hdl rv core per channel,
+    the payloads (flat, in their structs' layout) spliced onto the pins. No classes:
+    it reads only the bundle's class-free package and its woven part."""
+    return d.render("xtors/core.sv.j2", x=XtorView(b, role))
 
 
-def render_xtor_module(b: Bundle, role: str, pkg: str) -> str:
+def render_xtor_if(d, b: Bundle, role: str, pkg: str) -> str:
+    return d.render("xtors/if.sv.j2", x=XtorView(b, role, pkg))
+
+
+def render_xtor_module(d, b: Bundle, role: str, pkg: str) -> str:
     """The role's transactor for simulation: the core (``<name>_core``) plus one
     fw-hdl rv interface per channel, the class side's handles."""
-    name = xtor_name(b, role)
-    _, _, rst_hi = _clock_reset(b)
-    clk = b.clock
-    out = ["// %s. %s_core on the pins, one fw-hdl" % (_what(b, role), name),
-           "// rv interface per channel on its links (names as in the field table and on",
-           "// the protocol checker, so `.*` connects). The class side is u_if",
-           "// (%s_if), driven by %s_bridge." % (name, name),
-           "module %s\n    %s\n%s (" % (name, _imports(b, pkg), b.header)]
-    out += _ports(b, role, False)
-    out.append(");")
-    out += _typedefs(b)
-    out.append("    %s_if %s u_if ();" % (name, b.params_ref))
-    links = []
-    for c in b.channels:
-        kind = _kind(b, role, c)
-        sigs = ["up_valid", "up_ready"] + (["up_first", "up_xfer"] if kind == "monitor" else [])
-        out += ["",
-                "    %s %s_up_data;" % (c.payload_name, c.name),
-                "    bit %s;" % ", ".join("%s_%s" % (c.name, x) for x in sigs)]
-        conns = [".clock(%s)" % clk, ".reset(%s)" % rst_hi] + [
-            ".%s(%s_%s)" % (x, c.name, x) for x in ["up_data"] + sigs]
-        out.append("    fw_rv_%s_xtor_if #(.T(%s)) u_%s_if (%s);"
-                   % (kind, c.payload_name, c.name, ", ".join(conns)))
-        links += [".%s_%s(%s_%s)" % (c.name, x, c.name, x) for x in ["up_data"] + sigs]
-    out += ["",
-            "    %s_core %s u_core (.*, %s);" % (name, b.params_ref, ", ".join(links)),
-            "",
-            "    initial begin",
-            "        u_if.chans = new(%s);" % ", ".join("u_%s_if" % c.name for c in b.channels),
-            "        u_if.bound = 1;",
-            "    end",
-            "endmodule : %s" % name]
-    return "\n".join(out) + "\n"
+    return d.render("xtors/module.sv.j2", x=XtorView(b, role, pkg))
 
 
-def render_role_bridge(b: Bundle, role: str) -> str:
-    name = xtor_name(b, role) + "_bridge"
-    req, rsp = api_names(b)
-    sends = [c for c in b.channels if _sends(b, role, c)]
-    recvs = [c for c in b.channels if not _sends(b, role, c)]
-    out_api, in_api = (req, rsp) if role == b.roles[0] else (rsp, req)
-    in_var = "m_" + in_api[len(b.proto) + 1:-3]                     # m_rsp / m_req
-    vif = "virtual %s_if %s" % (xtor_name(b, role), b.params_ref)
-    out = ["// The pins of %s as the %s's channel API: %s goes out through"
-           % (xtor_name(b, role), role, out_api),
-           "// the rv initiators; run() passes each beat the pins receive to %s (%s)."
-           % (in_var, in_api),
-           "class %s %s implements %s;" % (name, b.header, b.spec(out_api))]
-    for c in sends:
-        out.append("    typedef %s::%s %s;" % (b.spec(out_api), c.payload_name, c.payload_name))
-    for c in recvs:
-        out.append("    typedef %s::%s %s;" % (b.spec(in_api), c.payload_name, c.payload_name))
-    out += ["    %s vif;" % vif,
-            "    %s %s;" % (b.spec(in_api), in_var),
-            "",
-            "    function new(%s vif_, %s %s = null);" % (vif, b.spec(in_api), in_var[2:]),
-            "        this.vif = vif_;",
-            "        %s = %s;" % (in_var, in_var[2:]),
-            "    endfunction"]
-    for c in sends:
-        out += ["",
-                "    virtual task %s(input %s t);" % (c.name, c.payload_name),
-                "        wait (vif.bound);",
-                "        vif.chans.%s.send(t);" % c.name,
-                "    endtask"]
-    out += ["",
-            "    // One loop per received channel, so a stalled channel holds up no other.",
-            "    virtual task run();",
-            "        wait (vif.bound);",
-            "        fork"]
-    for c in recvs:
-        out.append("            forever begin %s t; vif.chans.%s.recv(t); %s.%s(t); end"
-                   % (c.payload_name, c.name, in_var, c.name))
-    out += ["        join", "    endtask", "endclass"]
-    return "\n".join(out) + "\n"
+def render_role_bridge(d, b: Bundle, role: str) -> str:
+    return d.render("xtors/role_bridge.sv.j2", x=XtorView(b, role))
 
 
-def render_mon_bridge(b: Bundle) -> str:
-    name = xtor_name(b, MON) + "_bridge"
-    req, rsp = api_names(b)
-    vif = "virtual %s_if %s" % (xtor_name(b, MON), b.params_ref)
-    out = ["// What %s sees, as listener calls: <ch>_pre on the first valid"
-           % xtor_name(b, MON),
-           "// cycle of a beat, <ch>_post on its handshake. Add listeners to req and rsp.",
-           "class %s %s;" % (name, b.header)]
-    for c in b.channels:
-        api = req if c.fwd else rsp
-        out.append("    typedef %s::%s %s;" % (b.spec(api), c.payload_name, c.payload_name))
-    out += ["    %s vif;" % vif,
-            "    %s req = new();" % b.spec(req + "_listener_fanout"),
-            "    %s rsp = new();" % b.spec(rsp + "_listener_fanout"),
-            "",
-            "    function new(%s vif_);" % vif,
-            "        this.vif = vif_;",
-            "    endfunction",
-            "",
-            "    virtual task run();",
-            "        wait (vif.bound);",
-            "        fork"]
-    for c in b.channels:
-        fan = "req" if c.fwd else "rsp"
-        out += ["            forever begin",
-                "                %s t;" % c.payload_name,
-                "                bit first, xfer;",
-                "                vif.chans.%s.get_ev(t, first, xfer);" % c.name,
-                "                if (first) %s.%s_pre(t);" % (fan, c.name),
-                "                if (xfer) %s.%s_post(t);" % (fan, c.name),
-                "            end"]
-    out += ["        join", "    endtask", "endclass"]
-    return "\n".join(out) + "\n"
+def render_mon_bridge(d, b: Bundle) -> str:
+    return d.render("xtors/mon_bridge.sv.j2", x=XtorView(b, MON))
 
 
-def render_files(b: Bundle, pkg: str) -> List[Tuple[str, str]]:
+def render_files(d, b: Bundle, pkg: str) -> List[Tuple[str, str]]:
     """[(file name, text)]: per role (and mon), the core, the interface and the
     module, one declaration per file, named after it."""
     out = []
     for role in list(b.roles) + [MON]:
         name = xtor_name(b, role)
-        out.append((name + "_core.sv", render_xtor_core(b, role)))
-        out.append((name + "_if.sv", render_xtor_if(b, role, pkg)))
-        out.append((name + ".sv", render_xtor_module(b, role, pkg)))
+        out.append((name + "_core.sv", render_xtor_core(d, b, role)))
+        out.append((name + "_if.sv", render_xtor_if(d, b, role, pkg)))
+        out.append((name + ".sv", render_xtor_module(d, b, role, pkg)))
     return out
 
 
-def render_bridges(b: Bundle) -> List[str]:
+def render_bridges(d, b: Bundle) -> List[str]:
     """Package items: per role (and mon), the chans class; then the bridges."""
     roles = list(b.roles) + [MON]
-    return ([render_chans(b, r) for r in roles]
-            + [render_role_bridge(b, r) for r in b.roles] + [render_mon_bridge(b)])
+    return ([render_chans(d, b, r) for r in roles]
+            + [render_role_bridge(d, b, r) for r in b.roles] + [render_mon_bridge(d, b)])

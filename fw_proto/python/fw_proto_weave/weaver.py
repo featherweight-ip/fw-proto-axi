@@ -125,9 +125,9 @@ class FwProtoWeaver(Weaver):
             for pkg, b in bundles:
                 if not xtors.check(b, d.error) or not abs_.check(b, d.error):
                     continue
-                for text in xtors.render_bridges(b):
+                for text in xtors.render_bridges(d, b):
                     d.add_item(pkg, text)
                 for text in abs_.render(b):
                     d.add_item(pkg, text, imports=["fw_hdl_pkg", RUNTIME_PKG])
-                for name, text in xtors.render_files(b, pkg):
+                for name, text in xtors.render_files(d, b, pkg):
                     d.add_file(name, text)

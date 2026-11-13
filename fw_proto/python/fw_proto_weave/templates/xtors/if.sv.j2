@@ -1,0 +1,8 @@
+// The class side of {{ x.name }} (u_if): {{ x.name }} sets chans at time 0,
+// then raises bound; {{ x.name }}_bridge waits for bound.
+interface {{ x.name }}_if
+    {{ x.imports }}
+{{ x.header }};
+    {{ x.name }}_chans {{ x.params_ref }} chans;
+    bit bound;
+endinterface : {{ x.name }}_if

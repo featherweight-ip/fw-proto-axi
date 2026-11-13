@@ -1,0 +1,34 @@
+// The pins of {{ x.name }} as the {{ x.role }}'s channel API: {{ x.out_api }} goes out through
+// the rv initiators; run() passes each beat the pins receive to {{ x.in_var }} ({{ x.in_api }}).
+class {{ x.name }}_bridge {{ x.header }} implements {{ x.out_spec }};
+{% for c in x.sends %}
+    typedef {{ x.out_spec }}::{{ c.payload_name }} {{ c.payload_name }};
+{% endfor %}
+{% for c in x.recvs %}
+    typedef {{ x.in_spec }}::{{ c.payload_name }} {{ c.payload_name }};
+{% endfor %}
+    {{ x.vif }} vif;
+    {{ x.in_spec }} {{ x.in_var }};
+
+    function new({{ x.vif }} vif_, {{ x.in_spec }} {{ x.in_arg }} = null);
+        this.vif = vif_;
+        {{ x.in_var }} = {{ x.in_arg }};
+    endfunction
+{% for c in x.sends %}
+
+    virtual task {{ c.name }}(input {{ c.payload_name }} t);
+        wait (vif.bound);
+        vif.chans.{{ c.name }}.send(t);
+    endtask
+{% endfor %}
+
+    // One loop per received channel, so a stalled channel holds up no other.
+    virtual task run();
+        wait (vif.bound);
+        fork
+{% for c in x.recvs %}
+            forever begin {{ c.payload_name }} t; vif.chans.{{ c.name }}.recv(t); {{ x.in_var }}.{{ c.name }}(t); end
+{% endfor %}
+        join
+    endtask
+endclass
