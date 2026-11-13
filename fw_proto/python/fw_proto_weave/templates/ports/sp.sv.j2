@@ -1,0 +1,35 @@
+// The pin-level field table of {{ v.decl_name }}: name, width and direction of every
+// field, with absent fields (fw_opt) dropped. Extended once per role.
+virtual class {{ v.name }} {{ v.header }} extends fw_sp_base;
+    function new(string name, int unsigned role, fw_realized owner = null);
+        super.new(name, role, owner);
+        build_fields();
+    endfunction
+
+    virtual function string proto();
+        return "{{ v.proto }}";
+    endfunction
+
+    virtual function string param_lit();
+{% if v.struct_param %}
+        return $sformatf("%0d'h%0h", $bits({{ v.struct_param }}), {{ v.struct_param }});
+{% else %}
+        return "";
+{% endif %}
+    endfunction
+
+    protected function void build_fields();
+{# One variable per payload, read only by $bits. #}
+        /* verilator lint_off UNUSEDSIGNAL */
+{% for c in v.chans %}
+        {{ c.payload_type }} {{ c.name }};
+{% endfor %}
+        /* verilator lint_on UNUSEDSIGNAL */
+{% for c in v.chans %}
+{% for m in c.members %}
+        {{ m.guard }}add_field("{{ c.name }}{{ m.name }}", $bits({{ c.name }}.{{ m.name }}), {{ c.dir }});
+{% endfor %}
+        {{ c.family }} #({{ c.payload_type }})::add_ctl(this, "{{ c.name }}", {{ c.dir }});
+{% endfor %}
+    endfunction
+endclass

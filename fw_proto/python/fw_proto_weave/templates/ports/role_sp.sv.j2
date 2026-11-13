@@ -1,0 +1,34 @@
+// The {{ v.role }} side of {{ v.decl_name }}. link() joins it to the {{ v.other }} side (one bundle of
+// nets); bind_inner() makes a child's {{ v.role }} port this one, one level in.
+class {{ v.name }} {{ v.header }} extends {{ v.base_spec }};
+    function new(string name, fw_realized owner = null);
+        super.new(name, {{ v.index }}, owner);
+    endfunction
+
+    virtual function string role_name();
+        return "{{ v.role }}";
+    endfunction
+
+    function void link({{ v.other_spec }} peer);
+        do_link(peer);
+    endfunction
+
+    function void bind_inner({{ v.spec }} child);
+        do_bind_inner(child);
+    endfunction
+{% if v.xtor %}
+
+    // Across levels: the parent's API endpoint `api` reaches this port
+    // through an abstractor, <api>_abs, inserted under the parent.
+    // Like-to-like connections use link() and need none.
+    function {{ v.abs_spec }} connect({{ v.socket_spec }} api);
+        {{ v.abs_spec }} a;
+        if (m_owner == null || m_owner.get_parent() == null)
+            $fatal(1, "%s.connect: the port has no owner with a parent", m_name);
+        a = new({api.get_name(), "_abs"}, m_owner.get_parent());
+        a.serve(api);
+        a.sp.link(this);
+        return a;
+    endfunction
+{% endif %}
+endclass

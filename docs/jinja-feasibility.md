@@ -360,3 +360,14 @@ That is better than before templates, where every diagnostic named `weaver.py`'s
 So: do step 6 for `ports.py` and `endpoints.py` only, and stop there. Mixed
 styles in one package are acceptable: the rule is "text-heavy generators use
 templates", and the remaining four are logic-heavy.
+
+### Step 6 result
+
+Done as recommended (`ports.py`, `endpoints.py`; abs is now all-template). Line
+counts: `ports.py` 111 -> 92 + 69 template lines, `endpoints.py` 88 -> 67 + 55,
+`abs.py` 167 -> 149 (`connect_method` moved to `ports/role_sp.sv.j2`). As with
+steps 3-4, the views cost about what the string code did. One thing differs from
+the assessment's picture: an `fw_opt` guard at the start of an indented line
+would need `{%+ if %}` (plain `{% if %}` loses the indent to `lstrip_blocks`),
+so a shared `MemberView` carries it as text instead (`guard` = `if (P.X != 0) `, `cond` for
+`_mask`). The `%%0h`/`\"` escapes are gone, which was the point.

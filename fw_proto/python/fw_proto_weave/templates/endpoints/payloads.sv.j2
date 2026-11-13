@@ -1,0 +1,34 @@
+// sprint/compare/mask for the payloads of {{ v.decl_name }}. Absent fields (fw_opt) are
+// skipped by sprint and compare, and zeroed by mask.
+class {{ v.proto }}_payloads {{ v.header }};
+{% for p in v.payloads %}
+{% if not loop.first %}
+
+{% endif %}
+    static function string {{ p.n }}_sprint({{ p.t }} v);
+        string s = "";
+{% for m in p.members %}
+        {{ m.guard }}s = {s, $sformatf(" {{ m.name }}=0x%0h", v.{{ m.name }})};
+{% endfor %}
+        return (s.len() > 0) ? s.substr(1, s.len() - 1) : s;
+    endfunction
+
+    // 1 when equal; otherwise 0, with the differing fields in diff.
+    static function bit {{ p.n }}_compare({{ p.t }} a, {{ p.t }} b, output string diff);
+        diff = "";
+{% for m in p.members %}
+        {{ m.guard }}if (a.{{ m.name }} !== b.{{ m.name }}) diff = {diff, $sformatf(" {{ m.name }}: 0x%0h != 0x%0h", a.{{ m.name }}, b.{{ m.name }})};
+{% endfor %}
+        return diff == "";
+    endfunction
+
+    // v with its absent fields zeroed: what a link with pins delivers.
+    static function {{ p.t }} {{ p.n }}_mask({{ p.t }} v);
+        {{ p.t }} m = v;
+{% for m in p.opts %}
+        if (!({{ m.cond }})) m.{{ m.name }} = '0;
+{% endfor %}
+        return m;
+    endfunction
+{% endfor %}
+endclass

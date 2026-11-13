@@ -59,32 +59,32 @@ def derive(api, kinds=KINDS):
     return items
 
 
-def derive_bundle(bundle, apis, kinds=KINDS, xtor=False):
+def derive_bundle(d, bundle, apis, kinds=KINDS, xtor=False):
     """SV items for one bundle's own derivatives (after its channel APIs')."""
     if "bundle" not in kinds:
         return []
     items = []
     if "base" in kinds:
-        items += [render_inbox(a, bundle.channels) for a in apis]
-    items.append(render_sp(bundle))
-    items += render_role_sps(bundle, xtor)
-    items.append(render_payloads(bundle))
+        items += [render_inbox(d, a, bundle.channels) for a in apis]
+    items.append(render_sp(d, bundle))
+    items += render_role_sps(d, bundle, xtor)
+    items.append(render_payloads(d, bundle))
     return items
 
 
-def apis_of(model, include=(), err=None, kinds=KINDS, xtor=False):
+def apis_of(d, include=(), kinds=KINDS, xtor=False):
     """[(package, Api or None, [SV items])] in declaration order. An Api's items are
     its derivatives; a bundle adds a last entry (Api None) for its own."""
-    err = err or (lambda m: None)
-    decls = class_decls(model)
-    by_name = {d.name: d for _, d in decls}
+    err = d.error
+    decls = class_decls(d.model)
+    by_name = {x.name: x for _, x in decls}
     out = []
     for pkg, decl in decls:
         if decl.attrs.get(ATTR_BUNDLE):
             apis = channel_apis(decl, err)
             out.extend((pkg, a, derive(a, kinds)) for a in apis)
-            out.append((pkg, None, derive_bundle(bundle_of(decl, err, by_name), apis, kinds,
-                                                        xtor)))
+            out.append((pkg, None, derive_bundle(d, bundle_of(decl, err, by_name), apis,
+                                                      kinds, xtor)))
         elif decl.is_interface and (decl.attrs.get(ATTR_API) or decl.name in include):
             a = api_from_decl(decl)
             out.append((pkg, a, derive(a, kinds)))
@@ -111,7 +111,7 @@ class FwProtoWeaver(Weaver):
         include = list(d.options.get("include", []))
         kinds = tuple(d.options.get("derive", KINDS))
         xtor = bool(d.options.get("xtor", False))
-        for pkg, api, items in apis_of(d.model, include, d.error, kinds, xtor):
+        for pkg, api, items in apis_of(d, include, kinds, xtor):
             # A bundle's own derivatives build on the fw_proto runtime.
             imports = [RUNTIME_PKG] if api is None else []
             for text in items:

@@ -10,6 +10,9 @@
                              which inserts the abstractor (abs.py)
 
 The runtime they extend (fw_sp_base, fw_rv_ch::add_ctl) is fw_proto_pkg.
+
+The SV text is in ``templates/ports/``; here are the names and the views the
+templates read.
 """
 from typing import List
 
@@ -28,52 +31,54 @@ def _opt_cond(b: Bundle, opt) -> str:
     return "(%s) != 0" % o
 
 
-def render_sp(b: Bundle) -> str:
-    name = sp_name(b)
-    out = ["// The pin-level field table of %s: name, width and direction of every"
-           % b.decl_name,
-           "// field, with absent fields (fw_opt) dropped. Extended once per role.",
-           "virtual class %s %s extends fw_sp_base;" % (name, b.header)]
-    out += ["    function new(string name, int unsigned role, fw_realized owner = null);",
-            "        super.new(name, role, owner);",
-            "        build_fields();",
-            "    endfunction",
-            "",
-            "    virtual function string proto();",
-            '        return "%s";' % b.proto,
-            "    endfunction",
-            "",
-            "    virtual function string param_lit();"]
-    if b.struct_param:
-        out.append('        return $sformatf("%%0d\'h%%0h", $bits(%s), %s);'
-                   % (b.struct_param, b.struct_param))
-    else:
-        out.append('        return "";')
-    out += ["    endfunction",
-            "",
-            "    protected function void build_fields();"]
-    # One variable per payload, read only by $bits.
-    out.append("        /* verilator lint_off UNUSEDSIGNAL */")
-    for c in b.channels:
-        out.append("        %s %s;" % (c.payload_type, c.name))
-    out.append("        /* verilator lint_on UNUSEDSIGNAL */")
-    for c in b.channels:
-        d = "FW_FWD" if c.fwd else "FW_REV"
-        for m in c.members:
-            add = 'add_field("%s%s", $bits(%s.%s), %s);' % (c.name, m.name, c.name, m.name, d)
-            opt = m.attrs.get("fw_opt")
-            if opt:
-                out.append("        if (%s) %s" % (_opt_cond(b, opt), add))
-            else:
-                out.append("        " + add)
-        out.append('        %s #(%s)::add_ctl(this, "%s", %s);' % (c.family, c.payload_type,
-                                                                     c.name, d))
-    out += ["    endfunction", "endclass"]
-    return "\n".join(out)
+class MemberView:
+    """One payload member: ``cond`` is its fw_opt condition (None if always
+    present), ``guard`` the ``if (cond) `` that prefixes a statement on it."""
+
+    def __init__(self, b: Bundle, m):
+        self.name = m.name
+        opt = m.attrs.get("fw_opt")
+        self.cond = _opt_cond(b, opt) if opt else None
+        self.guard = "if (%s) " % self.cond if opt else ""
 
 
-def render_role_sps(b: Bundle, xtor: bool = False) -> List[str]:
-    """With ``xtor``, each role also gets connect(), from abs.py."""
+class _SpChan:
+    def __init__(self, b: Bundle, c):
+        self.name, self.payload_type, self.family = c.name, c.payload_type, c.family
+        self.dir = "FW_FWD" if c.fwd else "FW_REV"
+        self.members = [MemberView(b, m) for m in c.members]
+
+
+class SpView:
+    """What ports/sp.sv.j2 reads."""
+
+    def __init__(self, b: Bundle):
+        self.name, self.decl_name, self.header = sp_name(b), b.decl_name, b.header
+        self.proto, self.struct_param = b.proto, b.struct_param
+        self.chans = [_SpChan(b, c) for c in b.channels]
+
+
+class RoleSpView:
+    """What ports/role_sp.sv.j2 reads for one role. connect() (``xtor``) is
+    served by an abstractor of the other role."""
+
+    def __init__(self, b: Bundle, i: int, xtor: bool):
+        from . import abs as abs_
+        self.role, self.other, self.index = b.roles[i], b.roles[1 - i], i
+        self.name, self.decl_name, self.header = sp_name(b, self.role), b.decl_name, b.header
+        self.spec, self.base_spec = b.spec(self.name), b.spec(sp_name(b))
+        self.other_spec = b.spec(sp_name(b, self.other))
+        self.xtor = xtor
+        self.abs_spec = b.spec(abs_.abs_name(b, self.other))
+        self.socket_spec = b.spec(abs_.socket_name(b, self.role))
+
+
+def render_sp(d, b: Bundle) -> str:
+    return d.render("ports/sp.sv.j2", v=SpView(b))
+
+
+def render_role_sps(d, b: Bundle, xtor: bool = False) -> List[str]:
+    """With ``xtor``, each role also gets connect(), which inserts an abs.py abstractor."""
     from . import abs as abs_
     items = []
     if len(b.roles) != 2:
@@ -82,30 +87,6 @@ def render_role_sps(b: Bundle, xtor: bool = False) -> List[str]:
     if xtor:
         items += ["typedef class %s;" % abs_.abs_name(b, r) for r in b.roles]
         items += ["typedef class %s;" % abs_.socket_name(b, r) for r in b.roles]
-    for i, role in enumerate(b.roles):
-        other = b.roles[1 - i]
-        name = sp_name(b, role)
-        out = ["// The %s side of %s. link() joins it to the %s side (one bundle of"
-               % (role, b.decl_name, other),
-               "// nets); bind_inner() makes a child's %s port this one, one level in." % role,
-               "class %s %s extends %s;" % (name, b.header, b.spec(sp_name(b))),
-               "    function new(string name, fw_realized owner = null);",
-               "        super.new(name, %d, owner);" % i,
-               "    endfunction",
-               "",
-               "    virtual function string role_name();",
-               '        return "%s";' % role,
-               "    endfunction",
-               "",
-               "    function void link(%s peer);" % b.spec(sp_name(b, other)),
-               "        do_link(peer);",
-               "    endfunction",
-               "",
-               "    function void bind_inner(%s child);" % b.spec(name),
-               "        do_bind_inner(child);",
-               "    endfunction"]
-        if xtor:
-            out += [""] + abs_.connect_method(b, role)
-        out.append("endclass")
-        items.append("\n".join(out))
+    items += [d.render("ports/role_sp.sv.j2", v=RoleSpView(b, i, xtor))
+              for i in range(len(b.roles))]
     return items

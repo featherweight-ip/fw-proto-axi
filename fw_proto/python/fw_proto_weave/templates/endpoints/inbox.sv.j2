@@ -1,0 +1,21 @@
+// Queues every {{ v.api }} beat in a per-channel inbox, for scripted endpoints and
+// tests. Setting <ch>_in.stall holds that channel (READY low).
+class {{ v.name }} {{ v.header }} extends {{ v.api }}_base {{ v.params_ref }};
+{% for m in v.methods %}
+    fw_inbox #({{ m.type }}) {{ m.name }}_in = new;
+{% endfor %}
+
+{% for m in v.methods %}
+    virtual task {{ m.name }}(input {{ m.type }} t);
+        {{ m.name }}_in.put(t);
+    endtask
+{% endfor %}
+
+    function void clear();
+        {{ v.clears|join(" ") }}
+    endfunction
+
+    function bit idle();
+        return {{ v.idles|join(" && ") }};
+    endfunction
+endclass

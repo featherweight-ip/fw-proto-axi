@@ -28,7 +28,7 @@ The abstractor's role is the opposite of the RTL port's: an RTL subordinate port
 is driven by a manager abstractor, which serves the wrapper's subordinate socket.
 
 The SV text is in ``templates/abs/``; here are the names and the view objects the
-templates read. connect() stays Python text until ports.py moves to templates.
+templates read. connect() is in ``templates/ports/role_sp.sv.j2``.
 """
 from typing import List
 
@@ -139,24 +139,6 @@ def render_observers(d, b: Bundle) -> str:
 def render_handle(d, b: Bundle, role: str) -> str:
     """The run-time handle of ``render_abs``."""
     return d.render("abs/handle.sv.j2", v=AbsView(b, role))
-
-
-def connect_method(b: Bundle, role: str) -> List[str]:
-    """Lines of <proto>_<role>_sp::connect(): the port is RTL's, the endpoint a
-    component's of the same role; the abstractor plays the other role."""
-    a = abs_name(b, _other(b, role))
-    return ["    // Across levels: the parent's API endpoint `api` reaches this port",
-            "    // through an abstractor, <api>_abs, inserted under the parent.",
-            "    // Like-to-like connections use link() and need none.",
-            "    function %s connect(%s api);" % (b.spec(a), b.spec(socket_name(b, role))),
-            "        %s a;" % b.spec(a),
-            "        if (m_owner == null || m_owner.get_parent() == null)",
-            '            $fatal(1, "%s.connect: the port has no owner with a parent", m_name);',
-            '        a = new({api.get_name(), "_abs"}, m_owner.get_parent());',
-            "        a.serve(api);",
-            "        a.sp.link(this);",
-            "        return a;",
-            "    endfunction"]
 
 
 def render(d, b: Bundle) -> List[str]:
