@@ -8,7 +8,6 @@
 //   (* fw_api *)                  an API interface class
 //   (* fw_opt = "<P member>" *)   a payload field with pins only when P.<member> != 0
 //   (* fw_proto_bundle, fw_roles *), (* fw_fwd *), (* fw_rev *)   the port bundle
-//   (* fw_clock, fw_reset_n *)    the bundle's clock and reset pins
 //   (* fw_defs_pkg *)             the bundle's synthesizable package (for the RTL cores)
 package fw_proto_axi4_core_pkg;
     import fw_proto_pkg::*;

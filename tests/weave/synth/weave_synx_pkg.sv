@@ -1,6 +1,6 @@
 // A synthetic bundle for the transactor weave (xtor option), covering what the
-// AXI4 bundle does not: an active-high reset (fw_reset), non-default roles, one
-// channel each way and an fw_opt member. Woven with the AXI4 core.
+// AXI4 bundle does not: non-default roles, one channel each way and an fw_opt
+// member. Woven with the AXI4 core.
 package weave_synx_pkg;
     import fw_proto_pkg::*;
     import weave_synx_defs_pkg::*;
@@ -18,8 +18,7 @@ package weave_synx_pkg;
         } rsp_t;
     endclass
 
-    (* fw_proto_bundle = "synx", fw_roles = "ctl,per", fw_clock = "clk", fw_reset = "rst",
-       fw_defs_pkg = "weave_synx_defs_pkg" *)
+    (* fw_proto_bundle = "synx", fw_roles = "ctl,per", fw_defs_pkg = "weave_synx_defs_pkg" *)
     class synx_bundle #(synx_param_t P = SYNX_PARAM_DEFAULT);
         typedef synx_types #(P) t;
         (* fw_fwd *) fw_rv_ch #(t::cmd_t) cmd;

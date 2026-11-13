@@ -33,7 +33,7 @@ templates read. connect() is in ``templates/ports/role_sp.sv.j2``.
 from typing import List
 
 from .bundle import Bundle
-from .xtors import _clock_reset, api_names, xtor_name
+from .xtors import api_names, xtor_name
 
 
 def socket_name(b: Bundle, role: str) -> str:
@@ -98,8 +98,6 @@ class AbsView:
         self.sp_spec = b.spec("%s_%s_sp" % (b.proto, role))
         self.peer_socket_spec = b.spec(socket_name(b, self.other))
         self.send_chans = [c for c in b.channels if c.fwd == first]
-        clk, rst, _ = _clock_reset(b)
-        self.clk_rst = ".%s(clock), .%s(%sreset)" % (clk, rst, "!" if b.reset_n else "")
         self.s_var, self.r_var = _api_var(b, self.sends), _api_var(b, recvs)    # req / rsp
         self.bridge = xtor_name(b, role) + "_bridge"
         self.bridge_spec = b.spec(self.bridge)

@@ -1380,7 +1380,6 @@ package fw_proto_axi4_core_pkg_woven;
       virtual function string handle_type();
           return {"axi4_mgr_abs_h #(", sp.param_lit(), ")"};
       endfunction
-      virtual function string xtor_clk_rst(); return ".aclk(clock), .aresetn(!reset)"; endfunction
   endclass
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -1424,7 +1423,6 @@ package fw_proto_axi4_core_pkg_woven;
       virtual function string handle_type();
           return {"axi4_sub_abs_h #(", sp.param_lit(), ")"};
       endfunction
-      virtual function string xtor_clk_rst(); return ".aclk(clock), .aresetn(!reset)"; endfunction
   endclass
   /* verilator lint_on UNUSEDSIGNAL */
 

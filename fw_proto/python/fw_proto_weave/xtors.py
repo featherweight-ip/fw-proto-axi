@@ -13,8 +13,10 @@ class-free package (``fw_defs_pkg``), which the synthesizable cores import.
                                  onto the pins. Pin names are the field table's
                                  (``<ch><member>``, ``<ch>valid``, ``<ch>ready``);
                                  absent fields (fw_opt) keep their pin, tied to 0.
-                                 Clock and reset come from the bundle's ``fw_clock``
-                                 and ``fw_reset_n`` (or active-high ``fw_reset``).
+                                 Clock and reset are ``clock`` and an active-high
+                                 ``reset``, from the domain of the component that
+                                 holds the transactor (docs/design-domains.md); a
+                                 device's own names and polarity go in its pin map.
                                  ``<ch>_up_*`` link each core to the class side.
     <proto>_<role>_xtor #(P)     module: the core plus one fw-hdl rv interface per
                                  channel on its links; the same pins.
@@ -75,13 +77,6 @@ def _pin_type(member_type: str) -> str:
     return "logic [$bits(%s)-1:0]" % member_type.strip()
 
 
-def _clock_reset(b: Bundle) -> Tuple[str, str, str]:
-    """(clock pin, reset pin, active-high reset expression)."""
-    if b.reset_n:
-        return b.clock, b.reset_n, "!" + b.reset_n
-    return b.clock, b.reset, b.reset
-
-
 def check(b: Bundle, err) -> bool:
     bad = [c.name for c in b.channels if c.family != RV_FAMILY]
     if bad:
@@ -130,12 +125,11 @@ class _Chan:
                                            if self.kind == "monitor" else [])
         self.up_sigs = ["%s_%s" % (c.name, s) for s in sigs]
         self.links = [".%s_%s(%s_%s)" % (c.name, s, c.name, s) for s in ["up_data"] + sigs]
-        clk, rst_hi = b.clock, _clock_reset(b)[2]
-        self.if_conns = [".clock(%s)" % clk, ".reset(%s)" % rst_hi] + [
+        self.if_conns = [".clock(clock)", ".reset(reset)"] + [
             ".%s(%s_%s)" % (s, c.name, s) for s in ["up_data"] + sigs]
         core = ["up_data", "up_valid"] + (["up_first", "up_xfer"]
                                           if self.kind == "monitor" else []) + ["up_ready"]
-        self.core_conns = ([".clock(%s)" % clk, ".reset(%s)" % rst_hi]
+        self.core_conns = ([".clock(clock)", ".reset(reset)"]
                            + [".%s(%s_%s)" % (s, c.name, s) for s in core]
                            + [".data(%s_d)" % c.name, ".valid(%svalid)" % c.name,
                               ".ready(%sready)" % c.name])
@@ -242,8 +236,7 @@ def render_bits_fns(b: Bundle) -> str:
 
 def _ports(b: Bundle, role: str, uplink: bool) -> List[str]:
     """The pins (and, for the core, the link to the class side), comma-joined."""
-    clk, rst, _ = _clock_reset(b)
-    ports = ["    input  logic %s" % clk, "    input  logic %s" % rst]
+    ports = ["    input  logic clock", "    input  logic reset"]
     for c in b.channels:
         # valid and the payload go one way, ready the other; all in for the monitor
         fwd = "input " if role == MON or not _sends(b, role, c) else "output"

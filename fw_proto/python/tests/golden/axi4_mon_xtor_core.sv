@@ -6,8 +6,8 @@
 module axi4_mon_xtor_core
     import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_defs_pkg_woven::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) (
-    input  logic aclk,
-    input  logic aresetn,
+    input  logic clock,
+    input  logic reset,
 
     input  logic awvalid,
     input  logic awready,
@@ -99,7 +99,7 @@ module axi4_mon_xtor_core
     localparam int unsigned AW_REGION_LSB = (w1(P.AWUSER_W));
     localparam int unsigned AW_USER_LSB = 0;
     logic [AW_BITS-1:0] aw_d;
-    fw_rv_monitor_xtor_core #(.W(AW_BITS)) u_aw (.clock(aclk), .reset(!aresetn), .up_data(aw_up_data), .up_valid(aw_up_valid), .up_first(aw_up_first), .up_xfer(aw_up_xfer), .up_ready(aw_up_ready), .data(aw_d), .valid(awvalid), .ready(awready));
+    fw_rv_monitor_xtor_core #(.W(AW_BITS)) u_aw (.clock(clock), .reset(reset), .up_data(aw_up_data), .up_valid(aw_up_valid), .up_first(aw_up_first), .up_xfer(aw_up_xfer), .up_ready(aw_up_ready), .data(aw_d), .valid(awvalid), .ready(awready));
     assign aw_d[AW_ID_LSB +: (w1(P.ID_W))] = (P.ID_W != 0) ? awid : '0;
     assign aw_d[AW_ADDR_LSB +: (P.ADDR_W)] = awaddr;
     assign aw_d[AW_LEN_LSB +: 8] = awlen;
@@ -119,7 +119,7 @@ module axi4_mon_xtor_core
     localparam int unsigned W_LAST_LSB = (w1(P.WUSER_W));
     localparam int unsigned W_USER_LSB = 0;
     logic [W_BITS-1:0] w_d;
-    fw_rv_monitor_xtor_core #(.W(W_BITS)) u_w (.clock(aclk), .reset(!aresetn), .up_data(w_up_data), .up_valid(w_up_valid), .up_first(w_up_first), .up_xfer(w_up_xfer), .up_ready(w_up_ready), .data(w_d), .valid(wvalid), .ready(wready));
+    fw_rv_monitor_xtor_core #(.W(W_BITS)) u_w (.clock(clock), .reset(reset), .up_data(w_up_data), .up_valid(w_up_valid), .up_first(w_up_first), .up_xfer(w_up_xfer), .up_ready(w_up_ready), .data(w_d), .valid(wvalid), .ready(wready));
     assign w_d[W_DATA_LSB +: (P.DATA_W)] = wdata;
     assign w_d[W_STRB_LSB +: (P.DATA_W/8)] = wstrb;
     assign w_d[W_LAST_LSB +: 1] = wlast;
@@ -131,7 +131,7 @@ module axi4_mon_xtor_core
     localparam int unsigned B_RESP_LSB = (w1(P.BUSER_W));
     localparam int unsigned B_USER_LSB = 0;
     logic [B_BITS-1:0] b_d;
-    fw_rv_monitor_xtor_core #(.W(B_BITS)) u_b (.clock(aclk), .reset(!aresetn), .up_data(b_up_data), .up_valid(b_up_valid), .up_first(b_up_first), .up_xfer(b_up_xfer), .up_ready(b_up_ready), .data(b_d), .valid(bvalid), .ready(bready));
+    fw_rv_monitor_xtor_core #(.W(B_BITS)) u_b (.clock(clock), .reset(reset), .up_data(b_up_data), .up_valid(b_up_valid), .up_first(b_up_first), .up_xfer(b_up_xfer), .up_ready(b_up_ready), .data(b_d), .valid(bvalid), .ready(bready));
     assign b_d[B_ID_LSB +: (w1(P.ID_W))] = (P.ID_W != 0) ? bid : '0;
     assign b_d[B_RESP_LSB +: $bits(axi4_resp_e)] = bresp;
     assign b_d[B_USER_LSB +: (w1(P.BUSER_W))] = (P.BUSER_W != 0) ? buser : '0;
@@ -150,7 +150,7 @@ module axi4_mon_xtor_core
     localparam int unsigned AR_REGION_LSB = (w1(P.ARUSER_W));
     localparam int unsigned AR_USER_LSB = 0;
     logic [AR_BITS-1:0] ar_d;
-    fw_rv_monitor_xtor_core #(.W(AR_BITS)) u_ar (.clock(aclk), .reset(!aresetn), .up_data(ar_up_data), .up_valid(ar_up_valid), .up_first(ar_up_first), .up_xfer(ar_up_xfer), .up_ready(ar_up_ready), .data(ar_d), .valid(arvalid), .ready(arready));
+    fw_rv_monitor_xtor_core #(.W(AR_BITS)) u_ar (.clock(clock), .reset(reset), .up_data(ar_up_data), .up_valid(ar_up_valid), .up_first(ar_up_first), .up_xfer(ar_up_xfer), .up_ready(ar_up_ready), .data(ar_d), .valid(arvalid), .ready(arready));
     assign ar_d[AR_ID_LSB +: (w1(P.ID_W))] = (P.ID_W != 0) ? arid : '0;
     assign ar_d[AR_ADDR_LSB +: (P.ADDR_W)] = araddr;
     assign ar_d[AR_LEN_LSB +: 8] = arlen;
@@ -171,7 +171,7 @@ module axi4_mon_xtor_core
     localparam int unsigned R_LAST_LSB = (w1(P.RUSER_W));
     localparam int unsigned R_USER_LSB = 0;
     logic [R_BITS-1:0] r_d;
-    fw_rv_monitor_xtor_core #(.W(R_BITS)) u_r (.clock(aclk), .reset(!aresetn), .up_data(r_up_data), .up_valid(r_up_valid), .up_first(r_up_first), .up_xfer(r_up_xfer), .up_ready(r_up_ready), .data(r_d), .valid(rvalid), .ready(rready));
+    fw_rv_monitor_xtor_core #(.W(R_BITS)) u_r (.clock(clock), .reset(reset), .up_data(r_up_data), .up_valid(r_up_valid), .up_first(r_up_first), .up_xfer(r_up_xfer), .up_ready(r_up_ready), .data(r_d), .valid(rvalid), .ready(rready));
     assign r_d[R_ID_LSB +: (w1(P.ID_W))] = (P.ID_W != 0) ? rid : '0;
     assign r_d[R_DATA_LSB +: (P.DATA_W)] = rdata;
     assign r_d[R_RESP_LSB +: $bits(axi4_resp_e)] = rresp;

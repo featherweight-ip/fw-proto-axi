@@ -38,6 +38,5 @@ class {{ v.abs }} {{ v.header }} extends fw_boundary implements {{ v.sends_spec 
     virtual function string handle_type();
         return {"{{ v.handle }} #(", sp.param_lit(), ")"};
     endfunction
-    virtual function string xtor_clk_rst(); return "{{ v.clk_rst }}"; endfunction
 endclass
 /* verilator lint_on UNUSEDSIGNAL */

@@ -647,7 +647,6 @@ package weave_synx_pkg_woven;
       virtual function string handle_type();
           return {"synx_ctl_abs_h #(", sp.param_lit(), ")"};
       endfunction
-      virtual function string xtor_clk_rst(); return ".clk(clock), .rst(reset)"; endfunction
   endclass
   /* verilator lint_on UNUSEDSIGNAL */
 
@@ -686,7 +685,6 @@ package weave_synx_pkg_woven;
       virtual function string handle_type();
           return {"synx_per_abs_h #(", sp.param_lit(), ")"};
       endfunction
-      virtual function string xtor_clk_rst(); return ".clk(clock), .rst(reset)"; endfunction
   endclass
   /* verilator lint_on UNUSEDSIGNAL */
 

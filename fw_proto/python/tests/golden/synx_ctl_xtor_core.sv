@@ -6,8 +6,8 @@
 module synx_ctl_xtor_core
     import weave_synx_defs_pkg::*, weave_synx_defs_pkg_woven::*;
 #(synx_param_t P = SYNX_PARAM_DEFAULT) (
-    input  logic clk,
-    input  logic rst,
+    input  logic clock,
+    input  logic reset,
 
     output logic cmdvalid,
     input  logic cmdready,
@@ -33,7 +33,7 @@ module synx_ctl_xtor_core
     localparam int unsigned CMD_WDATA_LSB = 2;
     localparam int unsigned CMD_PRI_LSB = 0;
     logic [CMD_BITS-1:0] cmd_d;
-    fw_rv_initiator_xtor_core #(.W(CMD_BITS)) u_cmd (.clock(clk), .reset(rst), .up_data(cmd_up_data), .up_valid(cmd_up_valid), .up_ready(cmd_up_ready), .data(cmd_d), .valid(cmdvalid), .ready(cmdready));
+    fw_rv_initiator_xtor_core #(.W(CMD_BITS)) u_cmd (.clock(clock), .reset(reset), .up_data(cmd_up_data), .up_valid(cmd_up_valid), .up_ready(cmd_up_ready), .data(cmd_d), .valid(cmdvalid), .ready(cmdready));
     assign cmdwdata = cmd_d[CMD_WDATA_LSB +: (P.DATA_W)];
     assign cmdpri = (P.HAS_PRI != 0) ? cmd_d[CMD_PRI_LSB +: 2] : '0;
 
@@ -43,7 +43,7 @@ module synx_ctl_xtor_core
     localparam int unsigned RSP_OK_LSB = 1;
     localparam int unsigned RSP_LAST_LSB = 0;
     logic [RSP_BITS-1:0] rsp_d;
-    fw_rv_target_xtor_core #(.W(RSP_BITS)) u_rsp (.clock(clk), .reset(rst), .up_data(rsp_up_data), .up_valid(rsp_up_valid), .up_ready(rsp_up_ready), .data(rsp_d), .valid(rspvalid), .ready(rspready));
+    fw_rv_target_xtor_core #(.W(RSP_BITS)) u_rsp (.clock(clock), .reset(reset), .up_data(rsp_up_data), .up_valid(rsp_up_valid), .up_ready(rsp_up_ready), .data(rsp_d), .valid(rspvalid), .ready(rspready));
     assign rsp_d[RSP_RDATA_LSB +: (P.DATA_W)] = rsprdata;
     assign rsp_d[RSP_OK_LSB +: 1] = rspok;
     assign rsp_d[RSP_LAST_LSB +: 1] = rsplast;

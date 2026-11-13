@@ -24,7 +24,7 @@ DEFS = os.path.join(ROOT, "src/core/fw_proto_axi4_defs_pkg.sv")
 BASE = HDL_SOURCES + [os.path.join(ROOT, "fw_proto/src/fw_proto_pkg.sv"), DEFS,
                       os.path.join(ROOT, "src/core/fw_proto_axi4_core_pkg.sv")]
 SYNTH = os.path.join(ROOT, "tests", "weave", "synth")
-# The synthetic API and the synthetic bundle (no struct parameter, active-high reset).
+# The synthetic API and the synthetic bundle (no struct parameter).
 SOURCES = BASE + [os.path.join(SYNTH, f) for f in ("weave_synth_pkg.sv",
                                                    "weave_synth_bundle_pkg.sv")]
 CFG = """
@@ -45,6 +45,38 @@ def woven(tmp_path_factory):
     spec.incdirs.extend(INCDIRS)
     res = run(parse_config(CFG, base_dir=ROOT), spec=spec, out_dir=out)
     return res
+
+
+OLD_CLOCK_BUNDLE = """
+package oldb_pkg;
+    import fw_proto_pkg::*;
+    class oldb_types #(int AW = 8);
+        typedef struct packed { logic [AW-1:0] addr; } cmd_t;
+        typedef struct packed { logic ok; } rsp_t;
+    endclass
+    (* fw_proto_bundle = "oldb", fw_roles = "a,b", fw_clock = "clk", fw_reset_n = "rst_n" *)
+    class oldb_bundle #(int AW = 8);
+        typedef oldb_types #(AW) t;
+        (* fw_fwd *) fw_rv_ch #(t::cmd_t) cmd;
+        (* fw_rev *) fw_rv_ch #(t::rsp_t) rsp;
+    endclass
+endpackage
+"""
+
+
+def test_clock_reset_attrs_rejected(tmp_path):
+    """Clock and reset are domains (docs/design-domains.md), not bundle facts."""
+    from sv_weave.diag import SvWeaveError
+    from sv_weave.filelist import SourceSpec
+    src = tmp_path / "oldb_pkg.sv"
+    src.write_text(OLD_CLOCK_BUNDLE)
+    spec = SourceSpec()
+    spec.files.extend(BASE + [str(src)])
+    spec.incdirs.extend(INCDIRS)
+    with pytest.raises(SvWeaveError) as ex:
+        run(parse_config(CFG, base_dir=ROOT), spec=spec, out_dir=str(tmp_path / "out"))
+    assert "oldb_bundle: fw_clock, fw_reset_n: clock and reset are domains" in str(ex.value) \
+        or "oldb_bundle: fw_clock, fw_reset_n: clock and reset are domains" in repr(ex.value.__dict__)
 
 
 def _classes(text):
@@ -127,7 +159,7 @@ RV_SOURCES = [os.path.join(RV, "fw_rv_%s_xtor%s.sv" % (k, s))
               for k in ("initiator", "target", "monitor") for s in ("_if", "_core", "")]
 XTOR_FILES = ["axi4_%s_xtor%s.sv" % (r, s) for r in ("mgr", "sub", "mon")
               for s in ("", "_core", "_if")]
-# The synthetic transactor bundle: active-high reset, roles ctl/per.
+# The synthetic transactor bundle: roles ctl/per, an fw_opt member.
 SYNX_SOURCES = [os.path.join(SYNTH, f) for f in ("weave_synx_defs_pkg.sv", "weave_synx_pkg.sv")]
 SYNX_FILES = ["synx_%s_xtor%s.sv" % (r, s) for r in ("ctl", "per", "mon")
               for s in ("", "_core", "_if")]

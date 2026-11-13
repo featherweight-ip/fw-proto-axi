@@ -17,7 +17,9 @@ from .model import ATTR_API, ATTR_BUNDLE, Api, method
 from .sv import args_unused
 
 ATTR_FWD, ATTR_REV, ATTR_ROLES = "fw_fwd", "fw_rev", "fw_roles"
-ATTR_CLOCK, ATTR_RESET, ATTR_RESET_N = "fw_clock", "fw_reset", "fw_reset_n"
+# Clock and reset are domains, not bundle facts (docs/design-domains.md): a bundle
+# that still names them is an error.
+REMOVED_ATTRS = ("fw_clock", "fw_reset", "fw_reset_n")
 ATTR_DEFS_PKG = "fw_defs_pkg"
 _CH = re.compile(r"^(?P<family>[A-Za-z_]\w*)\s*#\s*\((?P<payload>.*)\)$")
 
@@ -44,9 +46,6 @@ class Bundle:
     header: str
     param_names: List[str]
     channels: List[Channel]
-    clock: str = "clock"               # fw_clock
-    reset: str = "reset"               # fw_reset (active high)
-    reset_n: str = ""                  # fw_reset_n (active low); wins over reset
     defs_pkg: str = ""                 # fw_defs_pkg: the class-free package of its parameters
 
     @property
@@ -114,8 +113,13 @@ def bundle_of(decl: SvDecl, err, decls: Dict[str, SvDecl]) -> Bundle:
     a = decl.attrs
     b = Bundle(decl.name, proto_of(decl), roles_of(decl), decl.header,
                list(decl.param_names), channels(decl, err, decls),
-               clock=str(a.get(ATTR_CLOCK, "clock")), reset=str(a.get(ATTR_RESET, "reset")),
-               reset_n=str(a.get(ATTR_RESET_N, "")), defs_pkg=str(a.get(ATTR_DEFS_PKG, "")))
+               defs_pkg=str(a.get(ATTR_DEFS_PKG, "")))
+    old = [n for n in REMOVED_ATTRS if n in a]
+    if old:
+        err("%s: %s: clock and reset are domains, not bundle attributes "
+            "(docs/design-domains.md): generated transactors take `clock` and an active-high "
+            "`reset` from their domain, and a device's pin names and polarity go in its pin map"
+            % (decl.name, ", ".join(old)))
     for c in b.channels:
         if not c.members:
             err("%s.%s: payload %s is not a packed struct this run has read; no field table"

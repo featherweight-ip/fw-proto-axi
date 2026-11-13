@@ -6,8 +6,8 @@
 module synx_per_xtor
     import weave_synx_defs_pkg::*, weave_synx_defs_pkg_woven::*, weave_synx_pkg::*, weave_synx_pkg_woven::*;
 #(synx_param_t P = SYNX_PARAM_DEFAULT) (
-    input  logic clk,
-    input  logic rst,
+    input  logic clock,
+    input  logic reset,
 
     input  logic cmdvalid,
     output logic cmdready,
@@ -26,11 +26,11 @@ module synx_per_xtor
 
     cmd_t cmd_up_data;
     bit cmd_up_valid, cmd_up_ready;
-    fw_rv_target_xtor_if #(.T(cmd_t)) u_cmd_if (.clock(clk), .reset(rst), .up_data(cmd_up_data), .up_valid(cmd_up_valid), .up_ready(cmd_up_ready));
+    fw_rv_target_xtor_if #(.T(cmd_t)) u_cmd_if (.clock(clock), .reset(reset), .up_data(cmd_up_data), .up_valid(cmd_up_valid), .up_ready(cmd_up_ready));
 
     rsp_t rsp_up_data;
     bit rsp_up_valid, rsp_up_ready;
-    fw_rv_initiator_xtor_if #(.T(rsp_t)) u_rsp_if (.clock(clk), .reset(rst), .up_data(rsp_up_data), .up_valid(rsp_up_valid), .up_ready(rsp_up_ready));
+    fw_rv_initiator_xtor_if #(.T(rsp_t)) u_rsp_if (.clock(clock), .reset(reset), .up_data(rsp_up_data), .up_valid(rsp_up_valid), .up_ready(rsp_up_ready));
 
     synx_per_xtor_core #(P) u_core (.*, .cmd_up_data(cmd_up_data), .cmd_up_valid(cmd_up_valid), .cmd_up_ready(cmd_up_ready), .rsp_up_data(rsp_up_data), .rsp_up_valid(rsp_up_valid), .rsp_up_ready(rsp_up_ready));
 

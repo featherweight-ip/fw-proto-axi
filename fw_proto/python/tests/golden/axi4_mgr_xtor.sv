@@ -6,8 +6,8 @@
 module axi4_mgr_xtor
     import fw_proto_axi4_defs_pkg::*, fw_proto_axi4_defs_pkg_woven::*, fw_proto_axi4_core_pkg::*, fw_proto_axi4_core_pkg_woven::*;
 #(axi4_param_t P = AXI4_PARAM_DEFAULT) (
-    input  logic aclk,
-    input  logic aresetn,
+    input  logic clock,
+    input  logic reset,
 
     output logic awvalid,
     input  logic awready,
@@ -67,23 +67,23 @@ module axi4_mgr_xtor
 
     aw_t aw_up_data;
     bit aw_up_valid, aw_up_ready;
-    fw_rv_initiator_xtor_if #(.T(aw_t)) u_aw_if (.clock(aclk), .reset(!aresetn), .up_data(aw_up_data), .up_valid(aw_up_valid), .up_ready(aw_up_ready));
+    fw_rv_initiator_xtor_if #(.T(aw_t)) u_aw_if (.clock(clock), .reset(reset), .up_data(aw_up_data), .up_valid(aw_up_valid), .up_ready(aw_up_ready));
 
     w_t w_up_data;
     bit w_up_valid, w_up_ready;
-    fw_rv_initiator_xtor_if #(.T(w_t)) u_w_if (.clock(aclk), .reset(!aresetn), .up_data(w_up_data), .up_valid(w_up_valid), .up_ready(w_up_ready));
+    fw_rv_initiator_xtor_if #(.T(w_t)) u_w_if (.clock(clock), .reset(reset), .up_data(w_up_data), .up_valid(w_up_valid), .up_ready(w_up_ready));
 
     b_t b_up_data;
     bit b_up_valid, b_up_ready;
-    fw_rv_target_xtor_if #(.T(b_t)) u_b_if (.clock(aclk), .reset(!aresetn), .up_data(b_up_data), .up_valid(b_up_valid), .up_ready(b_up_ready));
+    fw_rv_target_xtor_if #(.T(b_t)) u_b_if (.clock(clock), .reset(reset), .up_data(b_up_data), .up_valid(b_up_valid), .up_ready(b_up_ready));
 
     ar_t ar_up_data;
     bit ar_up_valid, ar_up_ready;
-    fw_rv_initiator_xtor_if #(.T(ar_t)) u_ar_if (.clock(aclk), .reset(!aresetn), .up_data(ar_up_data), .up_valid(ar_up_valid), .up_ready(ar_up_ready));
+    fw_rv_initiator_xtor_if #(.T(ar_t)) u_ar_if (.clock(clock), .reset(reset), .up_data(ar_up_data), .up_valid(ar_up_valid), .up_ready(ar_up_ready));
 
     r_t r_up_data;
     bit r_up_valid, r_up_ready;
-    fw_rv_target_xtor_if #(.T(r_t)) u_r_if (.clock(aclk), .reset(!aresetn), .up_data(r_up_data), .up_valid(r_up_valid), .up_ready(r_up_ready));
+    fw_rv_target_xtor_if #(.T(r_t)) u_r_if (.clock(clock), .reset(reset), .up_data(r_up_data), .up_valid(r_up_valid), .up_ready(r_up_ready));
 
     axi4_mgr_xtor_core #(P) u_core (.*, .aw_up_data(aw_up_data), .aw_up_valid(aw_up_valid), .aw_up_ready(aw_up_ready), .w_up_data(w_up_data), .w_up_valid(w_up_valid), .w_up_ready(w_up_ready), .b_up_data(b_up_data), .b_up_valid(b_up_valid), .b_up_ready(b_up_ready), .ar_up_data(ar_up_data), .ar_up_valid(ar_up_valid), .ar_up_ready(ar_up_ready), .r_up_data(r_up_data), .r_up_valid(r_up_valid), .r_up_ready(r_up_ready));
 
